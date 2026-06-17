@@ -1,0 +1,28 @@
+{
+    wayland.windowManager.hyprland.settings.env = [
+      "NVD_BACKEND,direct"
+      "LIBVA_DRIVER_NAME,nvidia"
+      "__GLX_VENDOR_LIBRARY_NAME,nvidia"
+      "GUM_CONFIRM_PROMPT_FOREGROUND,6;"
+      "GUM_CONFIRM_SELECTED_FOREGROUND,0;"
+      "GUM_CONFIRM_SELECTED_BACKGROUND,2;"
+      "GUM_CONFIRM_UNSELECTED_FOREGROUND,0;"
+      "GUM_CONFIRM_UNSELECTED_BACKGROUND,8"
+      "XCURSOR_SIZE,20"
+      "HYPRCURSOR_SIZE,20"
+      "XCURSOR_THEME,Adwaita"
+      "HYPRCURSOR_THEME,Adwaita"
+      "GDK_BACKEND,wayland,x11,*"
+      "QT_QPA_PLATFORM,wayland;xcb"
+      "QT_QPA_PLATFORMTHEME, kde"
+      "XDG_MENU_PREFIX, plasma-"
+      "SDL_VIDEODRIVER,wayland"
+      "MOZ_ENABLE_WAYLAND,1"
+      "ELECTRON_OZONE_PLATFORM_HINT,wayland"
+      "OZONE_PLATFORM,wayland"
+      "XDG_SESSION_TYPE,wayland"
+      "XDG_CURRENT_DESKTOP,Hyprland"
+      "XDG_SESSION_DESKTOP ,Hyprland"
+      "XCOMPOSEFILE,~/.Xcompose"
+  ];
+}

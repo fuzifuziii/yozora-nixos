@@ -1,0 +1,13 @@
+{
+  xdg.configFile."uwsm/default".text = ''
+export TERMINAL=xdg-terminal-exec
+export EDITOR=nvim
+  '';
+  xdg.configFile."uwsm/env".text = ''
+export FUZI_PATH=$HOME/.local/share/fuzi
+export PATH=$FUZI_PATH/bin:$PATH
+export PATH=$FUZI_PATH/pg:$PATH
+source ~/.config/uwsm/default
+fuzi-cmd-present mise && eval "$(mise activate bash)"
+  '';
+}

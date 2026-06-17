@@ -1,0 +1,29 @@
+{ config, pkgs, lib, ... }:
+{
+  environment.systemPackages = with pkgs; [
+     unzip
+     unrar
+     zip
+     unzip
+     nftables
+     wget
+     git
+     go
+     cargo
+     gcc
+     glib
+     ghostscript
+     electron
+     ffmpeg
+     icu
+     libnotify
+     gutenprint
+     dotnet-sdk
+     p7zip
+     freetype
+     gnutls
+     openjdk25
+     gtk4
+     gtk4-layer-shell
+   ];
+  }
