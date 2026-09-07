@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+rfkill unblock bluetooth
+exec fuzi-launch-or-focus-tui bluetui

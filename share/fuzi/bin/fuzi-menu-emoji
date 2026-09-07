@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+fuzi-shell shell toggle fuzi.emojis
