@@ -9,8 +9,6 @@
 | Terminal        | Kitty      |
 | Shell           | Fish       |
 
-The installer will ask whether to install the stable `main` or development `dev` branch.
-
 ## Basic binds
 
 | Bind            | Module    |
