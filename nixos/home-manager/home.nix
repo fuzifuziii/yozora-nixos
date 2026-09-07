@@ -4,14 +4,14 @@
     ./theme.nix
     ./programs.nix
 
-    ./fastfetch.nix
-    ./kitty.nix
-    ./fish.nix
+    ./programs/fastfetch.nix
+    ./programs/kitty.nix
+    ./programs/fish.nix
 
     ./quickshell.nix
     ./hyprland/settings.nix
     ./hyprland/xdph.nix
-    ./picker.nix
+    ./hyprland/picker.nix
   ];
 
   home.username = "fuzifuziii";
