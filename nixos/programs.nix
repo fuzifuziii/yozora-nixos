@@ -5,6 +5,8 @@
     # Base
     kitty
     kdePackages.dolphin
+    feh
+    mpv
 
     # Apps
     aseprite

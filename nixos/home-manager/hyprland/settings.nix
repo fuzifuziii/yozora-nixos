@@ -401,7 +401,7 @@
         }
         {
           match = {
-            class = "(org.fuzi.terminal|org.fuzi.bash|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|About|TUI.float|imv|mpv|org.kde.gwenview)";
+            class = "(org.fuzi.terminal|org.fuzi.bash|org.gnome.NautilusPreviewer|org.gnome.Evince|com.gabm.satty|About|TUI.float|imv|mpv|feh|org.kde.gwenview)";
           };
           tag = "+floating-window";
         }
