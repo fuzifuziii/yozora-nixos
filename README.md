@@ -4,7 +4,7 @@
 
 | Component       | Package    |
 | --------------- | ---------- |
-| WM              | Hyprland   |
+| WM              | Mango      |
 | Widgets         | Quickshell |
 | Terminal        | Kitty      |
 | Shell           | Fish       |
