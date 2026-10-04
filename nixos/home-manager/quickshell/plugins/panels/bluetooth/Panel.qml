@@ -12,13 +12,10 @@ Panel {
   id: root
   moduleName: "fuzi.bluetooth"
   ipcTarget: "fuzi.bluetooth"
-  // manageIpc: false so this panel can own the single IpcHandler the target
-  // permits — needed for the toggleBluetooth method below.
+  // manageIpc false so the panel owns the single IpcHandler
   manageIpc: false
 
-  // Address -> "connecting" | "disconnecting" | "forgetting".
-  // The actual Bluetooth sequencing lives in bin/fuzi-bluetooth-device;
-  // this map only keeps the panel responsive while BlueZ catches up.
+  // address -> connecting, disconnecting or forgetting
   property var pendingActions: ({})
 
   readonly property var adapter: Bluetooth.defaultAdapter
@@ -73,26 +70,16 @@ Panel {
     return activePhrases[phraseIndex % activePhrases.length]
   }
 
-  // Single cursor model shared by keyboard and mouse. Sections:
-  //   "connected"  — currently connected devices; Enter disconnects.
-  //   "known"      — remembered devices; Enter connects.
-  //   "discovered" — unremembered devices visible while scanning; Enter connects.
-  // Visuals always come from CursorSurface (hasCursor / current),
-  // never from containsMouse. Mouse hover updates root cursor state too,
-  // guaranteeing one highlight on screen.
+  // single cursor model for keyboard and mouse
   property string focusSection: "connected"
   property int selectedIndex: 0
   property bool actionFocused: false
   property bool cursorActive: false
 
-  // Stable identity for the focused device. Devices move between sections as
-  // they connect, disconnect, pair, or get forgotten, so follow the BlueZ
-  // address across section changes instead of preserving a stale row index.
+  // track the focused device by BlueZ address
   property string focusedDeviceAddress: ""
 
-  // "header" is a virtual section for the hero Bluetooth on/off toggle; it
-  // sits above the device sections so the adapter can be toggled by keyboard
-  // even when it is off and no device rows exist.
+  // virtual header section for the adapter toggle
   readonly property bool headerHasCursor: cursorActive && focusSection === "header"
   readonly property string toggleHint: root.adapter && root.adapter.enabled ? "Turn Bluetooth off" : "Turn Bluetooth on"
 
@@ -125,10 +112,7 @@ Panel {
     return Model.sectionDevices(deviceGroups, section)
   }
 
-  // The scrollable half of the panel — remembered devices, then whatever the
-  // scan turned up — flattened into one model so a ListView can own the
-  // viewport. Each entry carries the section it came from, which is what lets
-  // the delegate and the cursor keep working in section-relative terms.
+  // scrollable half flattened into one model
   readonly property var scrollRows: {
     var rows = []
     for (var k = 0; k < knownDevices.length; k++)
@@ -139,8 +123,7 @@ Panel {
     return rows
   }
 
-  // Flat position of the keyboard cursor, or -1 while it sits on the hero or
-  // in the connected list (both of which live outside the scroll area).
+  // flat cursor position, -1 on hero or connected list
   readonly property int scrollRowIndex: {
     if (focusSection !== "known" && focusSection !== "discovered") return -1
     for (var i = 0; i < scrollRows.length; i++)
@@ -148,7 +131,7 @@ Panel {
     return -1
   }
 
-  // A row opens a section when it is the first of its kind in the flat list.
+  // first row of its kind opens a section
   function scrollSectionTitle(index) {
     var rows = scrollRows
     if (index < 0 || index >= rows.length) return ""
@@ -291,8 +274,7 @@ Panel {
     if (changed) pendingActions = next
   }
 
-  // j/k navigates the hero toggle ("header") and the device sections
-  // row-by-row.
+  // j/k walks the hero toggle and device rows
   function moveCursor(delta) {
     var sections = visibleSections
     if (focusSection === "header") {
@@ -366,8 +348,7 @@ Panel {
     }
   }
 
-  // 'x' forgets remembered devices. For connected devices this first
-  // disconnects, then removes the BlueZ pairing record via fuzi-bluetooth-device.
+  // x forgets remembered devices
   function deleteSelected() {
     if (focusSection !== "known" && focusSection !== "connected") return
     var dev = deviceAt(focusSection, selectedIndex)
@@ -424,10 +405,7 @@ Panel {
 
   function clampCursor() {
     var sections = visibleSections
-    // "header" is virtual and never appears in visibleSections, so it has to
-    // be let through: toggling the adapter empties and refills the device
-    // lists, and clamping would knock the cursor off the hero switch every
-    // time it is used.
+    // let the virtual header section through
     if (focusSection === "header") return
     if (!sections || !sections.length) {
       selectedIndex = 0
@@ -440,7 +418,7 @@ Panel {
     }
     var count = sectionCount(focusSection)
     if (count === 0) {
-      // Section emptied out — bounce to the previous visible one.
+      // section emptied, bounce to the previous one
       var sIdx = sections.indexOf(focusSection)
       focusSection = sIdx > 0 ? sections[sIdx - 1] : sections[0]
       selectedIndex = Math.max(0, sectionCount(focusSection) - 1)
@@ -454,9 +432,7 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  // BlueZ rejects StartDiscovery while the adapter is still powering up, and
-  // discovery can also time out on its own. While the panel is open, keep
-  // nudging it back on so an enabled adapter is always scanning.
+  // keep nudging discovery on while the panel is open
   Timer {
     interval: 1000
     repeat: true
@@ -575,7 +551,7 @@ Panel {
           width: parent.width
           implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, powerSwitch.implicitHeight)
 
-          // Status only — the switch owns toggling, mouse and keyboard alike.
+          // status only, the switch owns toggling
           Text {
             id: heroIcon
             anchors.left: parent.left
@@ -587,8 +563,7 @@ Panel {
             opacity: root.adapter && root.adapter.enabled ? 1.0 : 0.5
           }
 
-          // Compact on/off switch on the trailing edge of the hero, and the
-          // header's only cursor target.
+          // compact on/off switch, the header's only cursor target
           ToggleSwitch {
             id: powerSwitch
             visible: !!root.adapter
@@ -640,8 +615,7 @@ Panel {
           }
         }
 
-        // Scrollable device list — capped so a noisy neighborhood doesn't
-        // grow the popup past the screen.
+        // device list capped to the screen
         PanelSeparator {
           foreground: root.bar.foreground
         }
@@ -677,10 +651,7 @@ Panel {
           foreground: root.bar.foreground
         }
 
-        // ListView, not a Flickable: it owns the scroll position, so it keeps
-        // the current row visible on j/k, re-clamps itself when discovery
-        // shortens the list, and — because Contain only moves when a row is
-        // actually clipped — never lurches under a hovering mouse.
+        // ListView owns scroll position and keeps the row visible
         ListView {
           width: parent.width
           height: Math.min(contentHeight, Style.space(400))
@@ -693,11 +664,7 @@ Panel {
 
           model: root.scrollRows
           currentIndex: root.scrollRowIndex
-          // Deferred by a turn. Called straight out of the signal the position
-          // does not take — verified with the cursor six rows down and
-          // contentY still 0 — because scrollRows is rebuilt every time
-          // discovery reports, and swapping the model resets the view out from
-          // under the call. Network's list is stable enough not to need this.
+          // defer the scroll by a turn, scrollRows rebuilds often
           onCurrentIndexChanged: if (currentIndex >= 0) Qt.callLater(keepCurrentVisible)
           function keepCurrentVisible() {
             if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
@@ -756,8 +723,7 @@ Panel {
     }
   }
 
-  // Two-line device row showing name + live status. Pending state is owned
-  // by the panel so it survives rows moving between sections.
+  // two-line device row with live status
   component DeviceRow: CursorSurface {
     id: row
     required property var dev

@@ -11,6 +11,10 @@
     lazyvim.url = "github:pfassina/lazyvim-nix";
     nixcord.url = "github:4evy/nixcord";
     cordial.url = "git+https://github.com/luohoa97/cordial?submodules=1";
+    pulsesync-mod = {
+      url = "file+https://github.com/PulseSync-LLC/PulseSync-mod/releases/latest/download/app.asar";
+      flake = false;
+    };
   };
 
   outputs = { self, nixpkgs, nixpkgs-stable, home-manager, lazyvim, nixcord, cordial, ... }@inputs: 

@@ -12,17 +12,13 @@ Panel {
   id: root
   moduleName: "fuzi.network"
   ipcTarget: "fuzi.network"
-  // manageIpc: false so this panel can own the single IpcHandler the target
-  // permits — needed for the toggleNetwork method below.
+  // manageIpc false so the panel owns the single IpcHandler
   manageIpc: false
 
-  // Centralized close so callers can't forget to drop the passphrase prompt.
+  // central close so the passphrase prompt is dropped
   readonly property bool overlayVisible: qrVisible || speedTestModalOpen
 
-  // Shadows the base open(): a summon or toggle while a centered card is up
-  // dismisses the card instead of opening the compact panel behind an
-  // exclusive overlay. The base toggle() dispatches here, so the keybind,
-  // the bar icon, and every IPC route all get this behavior.
+  // shadow open() to dismiss an open card first
   function open() {
     if (overlayVisible) {
       hideWifiQr()
@@ -35,8 +31,7 @@ Panel {
   function close() {
     root.controller.hide()
     cancelPasswordPrompt()
-    // The centered cards outlive the compact panel, but the widget's
-    // canonical close must not leave an overlay (or its traffic) behind.
+    // close must not leave a centered card behind
     hideWifiQr()
     hideSpeedTest()
   }
@@ -47,13 +42,10 @@ Panel {
     identityText = ""
   }
 
-  // Live connection details from `ip` / /sys / iw.
-  property var info: ({})  // { iface, type, ip, prefix, gateway, speed, duplex, ssid, signal, freq, bitrate, rx_bytes, tx_bytes, router_ping_ms, internet_ping_ms }
+  // live connection details from `ip` / /sys / iw
+  property var info: ({})  // iface, type, ip, gateway, speed, signal, pings
 
-  // Throughput tracking. Rates are computed as deltas between successive
-  // `fuzi-network-status --verbose` samples (~1.5s apart via detailsPoll).
-  // We hold "prev" alongside a timestamp so the first sample after open or
-  // after an interface switch doesn't manufacture a spike.
+  // throughput as deltas between status samples
   property real prevRxBytes: 0
   property real prevTxBytes: 0
   property real prevSampleTime: 0
@@ -69,9 +61,7 @@ Panel {
   readonly property int pingHistoryWindow: 24
   readonly property int pingAverageWindow: 5
   readonly property bool hasInternetPing: internetPingSamples.length > 0
-  // Every stat row stays mounted whether or not there is data behind it, so a
-  // sample arriving late never reflows the grid. This says whether the numbers
-  // are real yet or the row should read "--".
+  // whether the stat numbers are real yet
   readonly property bool hasTransferStats: info.rx_bytes !== undefined
   property int connectionPhraseIndex: 0
   readonly property var connectionPhrases: [
@@ -94,9 +84,7 @@ Panel {
   property bool wifiStationAvailable: false
   property string dnsProvider: ""
   property string pendingDnsProvider: ""
-  // Wi-Fi band state from `fuzi-network-band`. `bandCurrent` is the band
-  // the radio is actually on; `bandSelected` is the pinned choice ("auto" when
-  // nothing is pinned), and the two differ whenever Auto is in effect.
+  // band from fuzi-network-band, current vs selected
   property string bandCurrent: ""
   property string bandSelected: "auto"
   property var bandAvailable: []
@@ -111,13 +99,7 @@ Panel {
   property string speedTestUploadMbps: ""
   property string speedTestError: ""
 
-  // Per-row in-flight state. `actionSsid` flips on for the row whose action
-  // is currently running so it can render "Connecting…" / "Disconnecting…" /
-  // "Forgetting…". `passwordSsid` is the row currently expanded into
-  // password-entry mode; we keep it open across refresh cycles so a slow scan
-  // doesn't collapse the input the user is typing into. Rows must gate
-  // comparisons on the matching `*Kind`/`*Reason` being non-empty so a
-  // hidden-SSID row (ssid == "") doesn't collide with the "" defaults.
+  // per-row in-flight state
   property string actionSsid: ""
   property string actionKind: ""  // "connect" | "disconnect" | "forget"
   property string failureSsid: ""
@@ -138,26 +120,20 @@ Panel {
   property string qrPasswordError: ""
   readonly property bool qrVisible: qrLoading || qrSize > 0 || qrError !== ""
 
-  // True while any wifi action is mid-flight. Rows
-  // disable themselves on this so clicks on the other rows don't silently
-  // no-op against runNetworkAction's serialized guard.
+  // true while any wifi action runs
   readonly property bool busy: actionKind !== ""
 
-  // Index into `wifiNetworks` for keyboard navigation. -1 = no selection.
+  // keyboard index into wifiNetworks, -1 is none
   property int selectedIndex: -1
   property bool wifiActionFocused: false
   property bool cursorActive: false
 
-  // Keyboard focus zone for the panel. j/k crosses row boundaries:
-  // header actions ⇄ band ⇄ DNS row ⇄ Wi-Fi networks. h/l move
-  // within header actions, band pills, or DNS providers.
+  // keyboard focus zone, j/k crosses rows, h/l moves within
   property string focusSection: "dns"  // "header" | "band" | "dns" | "wifi"
   property int headerIndex: 0
   readonly property bool canDisconnect: !!connectedWifiNetwork
   readonly property bool canShareWifi: info.type === "wifi" && canShareNetwork(connectedWifiNetwork)
-  // The hero switch is the Wi-Fi radio, so it only exists when there is a
-  // radio to switch. On a wired box it would otherwise sit there reading
-  // "off" beside a perfectly live Ethernet connection.
+  // hero switch exists only with a Wi-Fi radio
   readonly property bool canToggleWifi: networkManagerAvailable && wifiStationAvailable
   readonly property int qrHeaderIndex: canShareWifi ? 0 : -1
   readonly property int speedHeaderIndex: canRunSpeedTest ? (canShareWifi ? 1 : 0) : -1
@@ -169,40 +145,25 @@ Panel {
   readonly property string toggleHint: Networking.wifiEnabled ? "Turn Wi-Fi off" : "Turn Wi-Fi on"
   readonly property var dnsProviders: ["DHCP", "Cloudflare", "Google", "Custom"]
   property int dnsIndex: 0
-  // ["2.4", "5", ...], or empty when there is nothing to choose between.
-  // Wi-Fi only: on Ethernet the band of a secondary radio is not what the
-  // panel is describing.
-  // `bandBusy` keeps the section mounted across the reconnect a band change
-  // causes: `kind` stops being "wifi" for a second or two in the middle of it,
-  // and without this the whole segment would vanish and rebuild itself.
-  // Worth showing when there is a real choice, or when a pin is in force even
-  // though only one band answers right now -- otherwise the Automatic switch
-  // vanishes and the pin becomes unclearable from the panel.
+  // bands to choose from, Wi-Fi only
   readonly property bool canSelectBand: (kind === "wifi" || bandBusy)
     && (bandAvailable.length > 1 || bandPinned)
-  // While a change is in flight, show the state that was asked for rather than
-  // the one still in force, so the row answers the click immediately instead of
-  // after the reconnect. actionProc puts it back if the change failed.
+  // show the requested state while a change is in flight
   readonly property string bandEffective: pendingBand !== "" ? pendingBand : bandSelected
   readonly property bool bandPinned: bandEffective !== "auto"
-  // Under Automatic there is nothing to pick, so the pills collapse away and
-  // the header states the live band instead.
+  // pills collapse under Automatic, header shows the band
   readonly property bool bandPillsVisible: canSelectBand && bandPinned
   readonly property string bandSectionTitle: Model.bandSectionTitle(bandEffective, bandCurrent)
   readonly property bool bandBusy: pendingBand !== ""
-  // The speed test needs an interface to test, so its hero action only
-  // appears once there is one.
+  // speed test needs an interface
   readonly property bool canRunSpeedTest: !!info.iface
   property int bandIndex: 0
-  // The band section has up to two cursor rows: the Automatic switch on the
-  // header line, then the pills. Same shape as wifiActionFocused.
+  // band section cursor rows, same shape as wifiActionFocused
   property bool bandAutoFocused: true
 
   onHeaderActionCountChanged: clampHeaderIndex()
 
-  // Availability shifts as scans land, so the option list can shrink out from
-  // under the cursor. Clamp the index and evacuate the section before it
-  // disappears, or the panel is left highlighting nothing.
+  // clamp the index and leave the section if it vanishes
   onBandAvailableChanged: {
     if (bandIndex > bandAvailable.length - 1) bandIndex = Math.max(0, bandAvailable.length - 1)
   }
@@ -214,8 +175,7 @@ Panel {
     }
   }
 
-  // Collapsing the pills out from under the cursor would leave it pointing at
-  // nothing, so send it up to the switch that is still on screen.
+  // move the cursor up when the pills collapse
   onBandPillsVisibleChanged: {
     if (!bandPillsVisible) bandAutoFocused = true
   }
@@ -245,7 +205,7 @@ Panel {
     function hide() { root.close() }
     function toggle() { root.toggle() }
     function toggleNetwork() { root.toggleNetwork() }
-    // Menu routes: summon the centered cards directly, panel open or not.
+    // menu routes summon the centered cards directly
     function showQr() {
       root.refresh()
       root.showWifiQr(true)
@@ -290,8 +250,7 @@ Panel {
     setBand(bandAvailable[bandIndex])
   }
 
-  // Switching Automatic off has to commit to something, so it pins whatever
-  // band the radio already landed on -- the reading the pills are showing.
+  // pin the current band when Automatic goes off
   function toggleBandAuto() {
     if (bandSelected !== "auto") {
       setBand("auto")
@@ -301,9 +260,7 @@ Panel {
     setBand(bandCurrent)
   }
 
-  // Park the cursor on the pinned band, so opening the panel highlights the
-  // pill the user would expect. Under Automatic there are no pills, so the
-  // cursor belongs on the switch.
+  // park the cursor on the pinned band
   function syncBandIndex() {
     var idx = bandAvailable.indexOf(bandSelected)
     bandIndex = idx >= 0 ? idx : 0
@@ -318,16 +275,11 @@ Panel {
     return Model.bandTooltip(band)
   }
 
-  // Single cursor model: exactly one highlighted spot across the whole
-  // panel, located via `focusSection` + (`headerIndex` | `dnsIndex` |
-  // `selectedIndex`). Mouse hover and keyboard nav both mutate this state
-  // at the root; items never read containsMouse for visuals. See
-  // CursorSurface for the shared chrome shared by rows and pills.
+  // single cursor model for the whole panel
   readonly property color hoverFill: bar ? Style.hoverFillFor(bar.foreground, Color.accent) : "transparent"
   readonly property color selectedFill: bar ? Style.selectedFillFor(bar.foreground, Color.accent) : "transparent"
 
-  // KeyboardPanel primes layer-shell focus whenever the panel opens. That's
-  // what makes the SUPER+CTRL+W keybind land here with navigation ready.
+  // KeyboardPanel primes focus on open
   onOpenedChanged: {
     if (opened) {
       refresh(true)
@@ -339,8 +291,7 @@ Panel {
       syncBandIndex()
       cursorActive = false
     } else {
-      // Reset throughput tracking so the next open doesn't compute a fake
-      // rate from a sample taken minutes ago.
+      // reset throughput tracking to avoid a fake rate
       prevSampleTime = 0
       downloadRate = 0
       uploadRate = 0
@@ -354,10 +305,7 @@ Panel {
     }
   }
 
-  // When the passphrase prompt closes (Esc / Cancel / success) restore
-  // focus to the keyCatcher so j/k/Enter resume working without a click.
-  // The KeyboardPanel's focusTarget covers initial popup-open; this handles
-  // the inline-editor case where focus was handed off to a child.
+  // restore focus to keyCatcher when the passphrase prompt closes
   onPasswordSsidChanged: {
     if (passwordSsid === "" && opened) {
       passwordText = ""
@@ -365,9 +313,7 @@ Panel {
     }
   }
 
-  // Keep selectedIndex valid as scans refresh the network list.
-  // If the list empties (station gone, e.g. wifi off), bounce the cursor
-  // back to the DNS row so the panel doesn't end up with no cursor at all.
+  // keep selectedIndex valid, bounce to the DNS row if empty
   onWifiNetworksChanged: {
     if (wifiNetworks.length === 0) {
       selectedIndex = -1
@@ -423,9 +369,7 @@ Panel {
     else if (delta < 0) wifiActionFocused = false
   }
 
-  // Enter/Space on the highlighted row. Mirrors row-click semantics:
-  // connected → disconnect, protected-unknown → password prompt,
-  // open/known → connect.
+  // Enter/Space acts like a row click
   function activateSelected() {
     if (busy || selectedIndex < 0 || selectedIndex >= wifiNetworks.length) return
     var net = wifiNetworks[selectedIndex]
@@ -436,9 +380,7 @@ Panel {
     connectKnown(net.ssid)
   }
 
-  // Bar pill state, derived from the native NetworkManager service so the
-  // icon reflects connection changes without polling. Wired is preferred
-  // when both are up, matching the default-route device.
+  // bar pill state from NetworkManager, wired preferred
   readonly property var wiredDevice: findDevice(DeviceType.Wired)
   readonly property string kind: {
     if (wiredDevice && wiredDevice.connected) return "ethernet"
@@ -458,8 +400,7 @@ Panel {
 
   function showWifiQr(forceDetect) {
     if (qrProc.running) {
-      // A dismissal's SIGTERM is still in flight; Process.running stays true
-      // until the child exits, so queue the reopen for onExited.
+      // queue the reopen for onExited, SIGTERM is in flight
       if (qrExpectedStop) {
         pendingQrShow = true
         pendingQrDetect = !!forceDetect
@@ -471,15 +412,13 @@ Panel {
     qrError = ""
     qrLoading = true
     qrExpectedStop = false
-    // The panel's own button shares the interface it is showing. The IPC
-    // route forces self-detection instead: details polling stops while the
-    // panel is closed, so its cached interface can be stale.
+    // IPC route forces self-detection, cached interface can be stale
     qrProc.command = !forceDetect && info.type === "wifi" && info.iface
       ? ["fuzi-network-qr", info.iface]
       : ["fuzi-network-qr"]
     qrProc.running = true
 
-    // Leave the compact network panel behind while the centered share card is open.
+    // leave the compact panel while the share card is open
     controller.hide()
     cancelPasswordPrompt()
   }
@@ -553,11 +492,7 @@ Panel {
   function updateDetails(raw) {
     var next = Model.parseKeyValue(raw)
 
-    // A band change tears the link down and brings it back, and the status
-    // command reports nothing at all while there is no route. Publishing that
-    // would blank every stat and unmount the whole section mid-toggle, so the
-    // last good sample stands until the reconnect settles. A real disconnect is
-    // still reported, because nothing is in flight then.
+    // keep the last good sample during a band change
     if (bandBusy && !next.iface) return
 
     info = next
@@ -614,9 +549,7 @@ Panel {
     return Model.formatPacketLoss(percent, hasInternetPing)
   }
 
-  // Prefer a connected device: a machine can expose several NICs of the
-  // same type (e.g. an idle onboard port alongside the active adapter),
-  // and the first-enumerated one may be carrierless.
+  // prefer a connected device among same-type NICs
   function findDevice(type) {
     var devices = networkDevices || []
     var fallback = null
@@ -669,9 +602,7 @@ Panel {
   function updateBand(raw) {
     var status = Model.parseBandStatus(raw)
 
-    // Mid-reconnect there is no connected station, so the command reports
-    // nothing. Publishing that would empty the option list and unmount the
-    // section on every toggle -- same guard as updateDetails.
+    // keep the option list while reconnecting
     if (bandBusy && status.available.length === 0) return
 
     bandCurrent = status.band
@@ -679,9 +610,7 @@ Panel {
     bandAvailable = status.available
   }
 
-  // Pinning a band reassociates, but the panel deliberately stays open: the
-  // reconnect is the thing you want to watch, and the details rows above
-  // report it as it happens.
+  // panel stays open while a band pin reconnects
   function setBand(band) {
     if (!band || actionProc.running) return
 
@@ -699,9 +628,7 @@ Panel {
     speedTestError = ""
   }
 
-  // The speed test lives in a centered modal card like the QR share.
-  // Opening it starts a fresh run; dismissing it stops the traffic, so the
-  // download workers never keep saturating the link behind a closed card.
+  // speed test modal, dismissing stops the traffic
   function showSpeedTest() {
     if (!speedTestModalOpen) {
       speedTestModalOpen = true
@@ -715,8 +642,7 @@ Panel {
     speedTestModalOpen = false
     pendingSpeedRun = false
     speedTestPhaseTimer.stop()
-    // Clear the phase before killing the process: onExited advances to the
-    // upload phase when it still reads "down".
+    // clear the phase before killing, onExited advances it
     speedTestPhase = ""
     speedTestRunning = false
     if (speedTestProc.running) {
@@ -727,8 +653,7 @@ Panel {
 
   function runSpeedTest() {
     if (speedTestProc.running) {
-      // A dismissal's SIGTERM is still in flight; Process.running stays true
-      // until the child exits, so queue the fresh run for onExited.
+      // queue the fresh run for onExited, SIGTERM is in flight
       if (speedTestExpectedStop) pendingSpeedRun = true
       return
     }
@@ -826,9 +751,7 @@ Panel {
     failureSsid = ""
     failureReason = ""
     callback(network)
-    // Safety net: if onExited never fires (process death, signal handler
-    // throws, etc.), clear the busy state so the row doesn't get stuck on
-    // "Connecting…" / "Disconnecting…" forever.
+    // safety net to clear a stuck busy state
     actionTimeout.restart()
   }
 
@@ -885,8 +808,7 @@ Panel {
     })
   }
 
-  // Creates and activates the 802.1X profile (see Model.enterpriseConnectScript).
-  // The password goes over stdin, never argv.
+  // create and activate the 802.1X profile, password via stdin
   Process {
     id: enterpriseConnect
     property string secret: ""
@@ -910,7 +832,7 @@ Panel {
 
   Component.onCompleted: refresh()
 
-  // Pulls everything we want about the active route's interface in one shot.
+  // fetch interface details of the active route in one shot
   Process {
     id: detailsProc
     command: ["fuzi-network-status", "--verbose"]
@@ -939,11 +861,7 @@ Panel {
 
   Process {
     id: qrProc
-    // Both collectors check qrExpectedStop: a dismissal mid-generation kills
-    // the process, but buffered output still arrives afterwards and would
-    // repopulate qrSize -- reopening the card the user just closed. The flag
-    // stays set through onExited (showWifiQr resets it) because the exit and
-    // stream-finished signals have no guaranteed order.
+    // ignore output after a dismissal via qrExpectedStop
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: if (!root.qrExpectedStop) root.updateQr(text)
@@ -969,10 +887,7 @@ Panel {
     }
   }
 
-  // The Wi-Fi password only enters shell memory when the user clicks to
-  // reveal it, and hideWifiQr drops it again when the share card closes.
-  // Both handlers bail when the card is gone so a fetch that was in flight
-  // during dismissal can't stash the secret into a closed panel's state.
+  // Wi-Fi password lives in memory only while revealed
   Process {
     id: pwProc
     stdout: StdioCollector {
@@ -1002,8 +917,7 @@ Panel {
     }
   }
 
-  // Slower than detailsPoll on purpose: this shells out to nmcli several times,
-  // and band availability only moves when a scan turns up a new BSSID.
+  // slower than detailsPoll, nmcli runs several times
   Timer {
     interval: 4000
     repeat: true
@@ -1051,8 +965,7 @@ Panel {
     onTriggered: root.stopSpeedTestPhase()
   }
 
-  // Action runner for DNS provider changes. Wi-Fi actions use the
-  // Quickshell.Networking NetworkManager backend directly.
+  // action runner for DNS changes
   Process {
     id: actionProc
     stdout: StdioCollector { id: actionStdout; waitForEnd: true }
@@ -1063,19 +976,16 @@ Panel {
         root.pendingDnsProvider = ""
       }
       if (root.pendingBand !== "") {
-        // A refused or reverted pin leaves bandSelected alone, so the pills
-        // keep showing what is actually in force rather than what was asked.
+        // keep bandSelected on a refused pin
         if (exitCode === 0) root.bandSelected = root.pendingBand
         root.pendingBand = ""
-        // The panel stayed open through the reconnect, so pull fresh state now
-        // instead of leaving stale readings until the next poll tick.
+        // refresh state now instead of waiting for the next poll
         root.refresh()
       }
     }
   }
 
-  // Poll details while the panel is open so the IP/route header catches up
-  // as soon as NetworkManager finishes activating a connection.
+  // poll details while the panel is open
   Timer {
     interval: 1500
     repeat: true
@@ -1145,12 +1055,7 @@ Panel {
     }
   }
 
-  // Keyboard-driven popup anchored to the bar widget icon. The shared
-  // KeyboardPanel handles the layer-shell PanelWindow scaffolding
-  // (focus priming on open, screen binding, anchored-to-icon positioning,
-  // outside-click via an overlay MouseArea + Region mask that lets the bar
-  // remain clickable, fade animation, popout coordination). What stays
-  // here is the wifi-specific UI inside.
+  // keyboard-driven popup anchored to the bar icon
   KeyboardPanel {
     id: panel
     anchorItem: button
@@ -1161,14 +1066,11 @@ Panel {
     contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
-    // Catches all unhandled keys for keyboard navigation. AfterItem priority
-    // lets the passphrase TextField (a child via focus chain) get its keys
-    // first; only events the focused subtree ignores bubble back here.
+    // catch unhandled keys, AfterItem lets the passphrase field go first
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      // Freeze the cursor model while the inline password prompt is open;
-      // the TextField inside owns input until Esc/Enter/Cancel.
+      // freeze the cursor while the password prompt is open
       blocked: root.passwordSsid !== ""
 
       onMoveRequested: function(dx, dy) {
@@ -1177,8 +1079,7 @@ Panel {
           if (dy >= 0) return
         }
         if (dy !== 0) {
-          // Vertical order is header ⇄ band ⇄ DNS ⇄ wifi, with the band section
-          // dropping out of the chain entirely when it isn't on screen.
+          // vertical order header, band, DNS, wifi
           if (root.focusSection === "header") {
             if (dy > 0) {
               if (root.canSelectBand) {
@@ -1189,8 +1090,7 @@ Panel {
               }
             }
           } else if (root.focusSection === "band") {
-            // Automatic on the header line, then the pills -- which collapse
-            // away under Automatic, leaving a single row to walk.
+            // Automatic on the header line, then the pills
             if (dy < 0) {
               if (!root.bandAutoFocused) {
                 root.bandAutoFocused = true
@@ -1204,9 +1104,7 @@ Panel {
               root.focusSection = "dns"
             }
           } else if (root.focusSection === "dns") {
-            // k from DNS moves up into the band section when it's on screen,
-            // then the disconnect button; otherwise stays put. j drops into the
-            // wifi list if there's anywhere to land.
+            // k from DNS goes up to band or disconnect, j drops into wifi
             if (dy < 0) {
               if (root.canSelectBand) {
                 root.focusSection = "band"
@@ -1220,8 +1118,7 @@ Panel {
               if (root.selectedIndex < 0) root.selectedIndex = 0
             }
           } else {  // wifi
-            // k from the top row escapes back up to the DNS row rather than
-            // wrapping around to the bottom of the list.
+            // k from the top row goes back up to DNS
             if (dy < 0 && root.selectedIndex <= 0) {
               root.focusSection = "dns"
               root.wifiActionFocused = false
@@ -1263,7 +1160,7 @@ Panel {
         width: parent.width
         implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, heroActions.implicitHeight)
 
-        // Status only — the switch owns toggling, mouse and keyboard alike.
+        // status only, the switch owns toggling
         Text {
           id: heroIcon
           text: root.icon
@@ -1275,8 +1172,7 @@ Panel {
           anchors.verticalCenter: parent.verticalCenter
         }
 
-        // Sharing belongs to the connected-network hero rather than the scan
-        // result row. The radio switch remains beside it as the other hero action.
+        // sharing belongs to the connected-network hero
         RowLayout {
           id: heroActions
           spacing: Style.space(8)
@@ -1340,8 +1236,7 @@ Panel {
           anchors.verticalCenter: parent.verticalCenter
           spacing: Style.space(2)
 
-          // Link detail rides inline after the name — "Ethernet (2.5gbit)" —
-          // rather than in a pill, which crowded the on/off switch.
+          // link detail inline after the name
           Text {
             id: heroSsid
             width: parent.width
@@ -1386,7 +1281,7 @@ Panel {
 
       }
 
-      // Connection details: transfer metrics first, then IP/Gateway.
+      // connection details, transfer metrics first
       Column {
         visible: !!root.info.iface
         width: parent.width
@@ -1398,10 +1293,7 @@ Panel {
           columnSpacing: Style.space(20)
           rowSpacing: Style.spacing.labelGap
 
-          // Always mounted: these two used to appear a beat after the panel
-          // opened, once the first probe returned, shoving everything below
-          // them down. They now hold their place and read "--" until there is
-          // a sample.
+          // always mounted, read "--" until a sample arrives
           InfoLabel { text: "Ping" }
           DetailValue {
             text: root.formatPingLatency(root.internetPingLatency)
@@ -1438,8 +1330,7 @@ Panel {
         }
       }
 
-      // Wi-Fi band selection. Only on Wi-Fi, and only when the network answers
-      // on more than one band -- a single-band AP has nothing to toggle.
+      // Wi-Fi band selection, only with more than one band
       PanelSeparator {
         visible: root.canSelectBand
         foreground: root.bar.foreground
@@ -1450,9 +1341,7 @@ Panel {
         width: parent.width
         spacing: Style.space(10)
 
-        // "Automatic" rides on the header line rather than under the pills: it
-        // qualifies the whole row, and at header scale it reads as a modifier
-        // instead of competing with the band choices for attention.
+        // Automatic rides on the header line
         Item {
           width: parent.width
           implicitHeight: Math.max(bandHeader.implicitHeight, bandAutoRow.implicitHeight)
@@ -1480,11 +1369,7 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
             }
 
-            // Sized off the label rather than the theme's control height so it
-            // reads as part of the header, and centred on the label's *glyphs*:
-            // PanelSectionHeader carries topPadding to protect Nerd Font
-            // overshoot, which pushes its text below its own box centre, so a
-            // plain verticalCenter would sit the switch visibly high.
+            // size off the label and center on its glyphs
             ToggleSwitch {
               id: bandAutoSwitch
               trackHeight: Math.round(bandAutoLabel.font.pixelSize * 1.2)
@@ -1515,11 +1400,7 @@ Panel {
           }
         }
 
-        // Collapsing container: the pills animate their height so toggling
-        // Automatic slides the sections below into place instead of snapping.
-        // `visible` only drops at a real zero, which keeps the row rendered for
-        // the whole animation and takes it out of the Column's spacing once
-        // it's actually gone.
+        // collapsing container, pills animate their height
         Item {
           width: parent.width
           clip: true
@@ -1542,10 +1423,7 @@ Panel {
             readonly property int count: Math.max(1, root.bandAvailable.length)
             readonly property real cellWidth: (width - spacing * (count - 1)) / count
 
-            // Wrapper takes modelData/index from the Repeater's delegate
-            // context, which doesn't bind into nested `component` declarations,
-            // and passes them down explicitly -- same shape as the network
-            // list delegate.
+            // wrapper passes modelData and index down explicitly
             Repeater {
               model: root.bandAvailable
 
@@ -1568,7 +1446,7 @@ Panel {
 
       }
 
-      // DNS provider selection.
+      // DNS provider selection
       PanelSeparator {
         foreground: root.bar.foreground
       }
@@ -1626,7 +1504,7 @@ Panel {
       }
 
 
-      // Wi-Fi networks (only if a Wi-Fi station is available).
+      // Wi-Fi networks (only if a Wi-Fi station is available)
       PanelSeparator {
         visible: root.wifiStationAvailable
         foreground: root.bar.foreground
@@ -1639,11 +1517,7 @@ Panel {
         fontFamily: root.bar.fontFamily
       }
 
-      // Scrollable network list — cap the height so a busy neighbourhood
-      // doesn't push the popup off-screen. ListView (vs Repeater+Column)
-      // gives us positionViewAtIndex for free, which is what keeps the
-      // keyboard-selected row scrolled into view as j/k walk past the
-      // visible window.
+      // network list capped in height, ListView for positionViewAtIndex
       ListView {
         visible: root.wifiStationAvailable
         width: parent.width
@@ -1659,9 +1533,7 @@ Panel {
         currentIndex: root.selectedIndex
         onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
 
-        // Wrapper takes the required props from ListView's delegate context
-        // (which doesn't bind into nested `component` declarations like
-        // NetworkRow) and passes them down explicitly.
+        // wrapper passes delegate props down explicitly
         delegate: Item {
           required property var modelData
           required property int index
@@ -1730,10 +1602,7 @@ Panel {
     onRunAgainRequested: root.runSpeedTest()
   }
 
-  // One Wi-Fi band pill. `active` (fill) is the band actually in use and
-  // `selected` (bold) is the pinned choice; with Automatic on nothing is
-  // pinned, so only the live band lights up and the two can no longer read as
-  // a contradiction. They land on the same pill once a band is pinned.
+  // one Wi-Fi band pill
   component BandPill: Button {
     id: pill
     required property string band
@@ -1763,9 +1632,7 @@ Panel {
     }
   }
 
-  // One DNS provider pill. The cursor + current visuals come entirely from
-  // CursorSurface; this component just binds them to the panel's cursor
-  // state and renders the label/tooltip/click target.
+  // one DNS provider pill
   component DnsProviderPill: Button {
     id: pill
     required property string provider
@@ -1779,9 +1646,7 @@ Panel {
     verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
     bordered: true
 
-    // Map the panel's domain semantics onto Button's structural props:
-    // `current DNS` is the pill's `active` fill; the keyboard cursor lights
-    // up `hasCursor`.
+    // map DNS state onto Button's props
     active: root.dnsProvider === provider
     hasCursor: root.cursorActive && root.focusSection === "dns" && root.dnsIndex === index
 
@@ -1793,10 +1658,7 @@ Panel {
     }
   }
 
-  // A single Wi-Fi network entry. Collapses to a one-line pill normally;
-  // expands inline to a passphrase prompt when the user picks a protected
-  // network we don't have credentials for. Clicking a connected row
-  // disconnects.
+  // single Wi-Fi network entry, expands to a passphrase prompt
   component NetworkRow: CursorSurface {
     id: row
     required property var net
@@ -1818,8 +1680,7 @@ Panel {
     foreground: root.bar.foreground
     fill: root.hoverFill
     currentFill: root.selectedFill
-    // Gate on the matching *Kind/*Reason being non-empty so a hidden-SSID
-    // row (ssid == "") doesn't match the "" defaults of actionSsid etc.
+    // gate on non-empty kind so hidden-SSID rows do not match
     readonly property bool isBusy: root.actionKind !== "" && root.actionSsid === (net ? net.ssid : "")
     readonly property bool isFailed: root.failureReason !== "" && root.failureSsid === (net ? net.ssid : "")
     readonly property bool isPasswordOpen: root.passwordSsid !== "" && root.passwordSsid === (net ? net.ssid : "")
@@ -1878,15 +1739,12 @@ Panel {
       cursorShape: Qt.PointingHandCursor
       enabled: !root.busy
 
-      // Move the cursor here when the mouse enters; mouse leaving doesn't
-      // clear it (so the cursor stays where the mouse last was and
-      // subsequent j/k pick up from this row).
+      // move the cursor here on mouse enter
       onContainsMouseChanged: if (containsMouse) { root.cursorActive = true; root.focusSection = "wifi"; root.selectedIndex = row.index; root.wifiActionFocused = false }
 
       onClicked: {
         if (!row.net) return
-        // Resync cursor in case keyboard nav moved it away while the mouse
-        // stayed parked on this row — the click target is unambiguously here.
+        // resync the cursor after keyboard nav moved it away
         root.cursorActive = true
         root.focusSection = "wifi"
         root.selectedIndex = row.index
@@ -1922,8 +1780,7 @@ Panel {
         anchors.verticalCenter: parent.verticalCenter
       }
 
-      // Shows a lock glyph for protected networks. Known disconnected
-      // networks reveal the forget action when hovering that right edge.
+      // lock glyph for protected networks, forget on hover
       Item {
         id: rightAction
         visible: row.isProtected
@@ -1988,11 +1845,7 @@ Panel {
           width: parent.width
         }
         Text {
-          // Signal strength is conveyed by the wifi-bars icon and the
-          // right-edge glyph/buttons carry protection or forget affordances,
-          // so the second line only carries action status (Connecting…,
-          // Connected, Failed, etc.). Collapses to zero height when empty
-          // so rows without status keep a tight one-line look.
+          // second line carries action status only
           text: row.statusText
           visible: row.statusText !== ""
           height: visible ? implicitHeight : 0
@@ -2015,9 +1868,7 @@ Panel {
       }
     }
 
-    // Inline passphrase prompt — only shown when we hit a protected network
-    // we don't have saved credentials for. Submitting (Enter or the check
-    // button) fires connect; Esc cancels back to the row.
+    // inline passphrase prompt for protected networks
     Item {
       id: passwordPanel
       visible: row.isPasswordOpen
@@ -2101,9 +1952,7 @@ Panel {
         }
       }
 
-      // 22×22 right-anchored to line up with lockIndicator above. Esc closes
-      // the prompt (handled by pwField.Keys.onEscapePressed)
-      // so there's no separate cancel button.
+      // 22x22 right-anchored to line up with lockIndicator
       PanelActionButton {
         id: connectPwBtn
         visible: !row.isBusy && !row.isFailed

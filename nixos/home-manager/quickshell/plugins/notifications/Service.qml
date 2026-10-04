@@ -16,7 +16,7 @@ Item {
 
   property string fuziPath: Quickshell.env("FUZI_PATH")
   readonly property string home: Quickshell.env("HOME")
-  // Persistent history under state dir (survives quickshell restarts).
+  // persistent history under the state dir
   readonly property string stateDir: home + "/.local/share/fuzi/"
   readonly property string historyPath: stateDir + "notifications.json"
   readonly property string cacheDir: home + "/.cache/fuzi/"

@@ -32,6 +32,11 @@ Item {
   property int cardHeight: Math.min(Style.space(600), panel.height - Style.gapsOut * 2)
   property int rowHeight: Math.max(Style.space(50), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
   property int historyLimit: 300
+  property string cacheDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/fuzi-clipboard"
+  property int imagePrefetch: 30
+  property var imageFiles: ({})
+  property var imageQueue: []
+  property var rawLineById: ({})
 
   function open(payloadJson) {
     root.opened = true
@@ -57,9 +62,54 @@ Item {
     if (!listProc.running) listProc.running = true
   }
 
+  // decode image entries to the cache dir, newest first
+  function queueImages(ids) {
+    var next = root.imageQueue.slice()
+    for (var i = 0; i < ids.length; i++) {
+      var id = String(ids[i])
+      if (!root.imageFiles[id] && next.indexOf(id) === -1) next.push(id)
+    }
+    root.imageQueue = next
+    root.runImageQueue()
+  }
+
+  function runImageQueue() {
+    if (decodeProc.running || root.imageQueue.length === 0) return
+    var batch = root.imageQueue.slice(0, 8)
+    root.imageQueue = root.imageQueue.slice(8)
+    // Pass: cacheDir, then for each id: id, rawLine (so cliphist gets the full list line)
+    var args = [root.cacheDir]
+    for (var i = 0; i < batch.length; i++) {
+      var id = batch[i]
+      args.push(id)
+      args.push(root.rawLineById[id] || id)
+    }
+    decodeProc.command = ["bash", "-c", root.decodeScript, "bash"].concat(args)
+    decodeProc.running = true
+  }
+
+  function imageDecoded(id, path) {
+    var next = Object.assign({}, root.imageFiles)
+    next[id] = "file://" + path
+    root.imageFiles = next
+  }
+
+  function ensureSelectedImage() {
+    if (root.selectedIndex < 0 || root.selectedIndex >= displayModel.count) return
+    var row = displayModel.get(root.selectedIndex)
+    if (row.entryType === "image") root.queueImages([row.clipId])
+  }
+
+  onSelectedIndexChanged: root.ensureSelectedImage()
+
+  // $1 = cacheDir, then pairs: id rawLine id rawLine ...
+  // Pass full list line into cliphist decode (works on all versions). Save as .png — Qt Image sniffs content.
+  readonly property string decodeScript: 'dir="$1"; shift; mkdir -p "$dir"; while [ $# -ge 2 ]; do id="$1"; rawline="$2"; shift 2; f="$dir/$id.png"; if [ -s "$f" ]; then echo "$id	$f"; continue; fi; printf "%s\\n" "$rawline" | cliphist decode > "$f" 2>/dev/null; if [ -s "$f" ]; then echo "$id	$f"; else rm -f "$f"; fi; done'
+
   function parseCliphistList(output) {
     var lines = String(output || "").split("\n")
     var items = []
+    var lineMap = {}
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i]
       if (!line) continue
@@ -75,9 +125,16 @@ Item {
         preview: text,
         isImage: isImg
       })
+      lineMap[id] = line
     }
     root.rawItems = items
+    root.rawLineById = lineMap
     root.rebuildDisplay()
+    var imageIds = []
+    for (var k = 0; k < items.length && imageIds.length < root.imagePrefetch; k++) {
+      if (items[k].isImage) imageIds.push(items[k].id)
+    }
+    root.queueImages(imageIds)
   }
 
   function rebuildDisplay() {
@@ -92,8 +149,7 @@ Item {
         rawLine: item.rawLine,
         entryType: item.isImage ? "image" : "text",
         previewText: item.preview,
-        fullText: item.preview,
-        previewImage: ""
+        fullText: item.preview
       })
       count++
     }
@@ -222,6 +278,10 @@ Item {
 
   function confirmClearHistory() {
     Quickshell.execDetached(["cliphist", "wipe"])
+    Quickshell.execDetached(["rm", "-rf", root.cacheDir])
+    root.imageFiles = ({})
+    root.imageQueue = []
+    root.rawLineById = ({})
     root.rawItems = []
     root.selectedIndex = 0
     root.cursorActive = false
@@ -247,6 +307,22 @@ Item {
       waitForEnd: true
       onStreamFinished: root.parseCliphistList(text)
     }
+  }
+
+  Process {
+    id: decodeProc
+    stdout: SplitParser {
+      onRead: function(line) {
+        var s = String(line).trim()
+        if (!s) return
+        var tab = s.indexOf("\t")
+        if (tab === -1) return
+        var id = s.substring(0, tab)
+        var path = s.substring(tab + 1)
+        if (id && path) root.imageDecoded(id, path)
+      }
+    }
+    onExited: root.runImageQueue()
   }
 
   Process {
@@ -441,7 +517,7 @@ Item {
                   required property string entryType
                   required property string previewText
                   required property string fullText
-                  required property string previewImage
+                  required property string clipId
 
                   readonly property bool hasCursor: root.cursorActive && index === root.selectedIndex
 
@@ -458,8 +534,20 @@ Item {
                     anchors.bottomMargin: Style.space(8)
                     spacing: Style.space(10)
 
+                    Image {
+                      id: thumb
+                      visible: status === Image.Ready
+                      width: visible ? parent.height * 1.6 : 0
+                      height: parent.height
+                      source: parent.parent.entryType === "image" ? (root.imageFiles[parent.parent.clipId] || "") : ""
+                      sourceSize.height: 96
+                      fillMode: Image.PreserveAspectCrop
+                      asynchronous: true
+                      cache: false
+                    }
+
                     Text {
-                      width: parent.width
+                      width: parent.width - (thumb.visible ? thumb.width + parent.spacing : 0)
                       height: parent.height
                       text: parent.parent.previewText
                       color: parent.parent.hasCursor ? root.selectedText : root.foreground
@@ -495,6 +583,7 @@ Item {
               clip: true
 
               property var activeRow: displayModel.count > 0 && root.selectedIndex >= 0 && root.selectedIndex < displayModel.count ? displayModel.get(root.selectedIndex) : null
+              readonly property string activeImage: activeRow && activeRow.entryType === "image" ? (root.imageFiles[activeRow.clipId] || "") : ""
 
               Rectangle {
                 anchors.left: parent.left
@@ -504,8 +593,21 @@ Item {
                 color: Util.alpha(root.border, 0.28)
               }
 
+              Image {
+                visible: status === Image.Ready
+                anchors.fill: parent
+                anchors.leftMargin: root.contentMargin
+                source: parent.activeImage
+                sourceSize.width: 1600
+                fillMode: Image.PreserveAspectFit
+                horizontalAlignment: Image.AlignLeft
+                verticalAlignment: Image.AlignTop
+                asynchronous: true
+                cache: false
+              }
+
               Text {
-                visible: parent.activeRow !== null
+                visible: parent.activeRow !== null && parent.activeImage === ""
                 anchors.fill: parent
                 anchors.leftMargin: root.contentMargin
                 anchors.rightMargin: 0

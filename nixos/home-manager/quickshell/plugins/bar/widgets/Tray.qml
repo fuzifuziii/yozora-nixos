@@ -29,7 +29,7 @@ BarWidget {
   readonly property int trayItemGap: 0
   readonly property int trayJoinGap: 0
   readonly property int drawerExtent: drawerCount > 0 ? drawerCount * trayItemExtent + (drawerCount - 1) * trayItemGap : 0
-  // Match Waybar's group/tray-expander drawer transition-duration.
+  // match Waybar's tray-expander transition duration
   readonly property int animationDuration: 600
   property real revealProgress: expanded ? 1 : 0
   readonly property real revealExtent: drawerExtent * revealProgress
@@ -52,17 +52,11 @@ BarWidget {
   }
 
   function trayIconSource(icon) {
-    // Quickshell already resolves the tray icon into a ready-to-use image://
-    // URL, including a "?path=" fallback search dir for apps that ship their
-    // tray icon outside a standard theme (e.g. Steam's flat public/ dir). Hand
-    // it straight to IconImage; guessing a theme sub-directory here only broke
-    // apps whose layout didn't match the guess.
+    // use Quickshell's resolved image:// URL as is
     return String(icon || "")
   }
 
-  // Symbolic icons ship a fixed fill (often near-white) that the host is meant
-  // to recolor to its foreground; detect them by the freedesktop "-symbolic"
-  // name suffix so they can be tinted instead of rendered as-is.
+  // detect symbolic icons by the -symbolic suffix
   function iconIsSymbolic(icon) {
     var name = String(icon || "").split("?")[0]
     return name.slice(-9) === "-symbolic"
@@ -75,7 +69,7 @@ BarWidget {
   function classifyItem(item) {
     var iid = String(item.id || "")
     if (hiddenIds.indexOf(iid) !== -1) return "hidden"
-    // Always show tray icons — no expander chevron / drawer.
+    // always show tray icons — no expander chevron / drawer
     return "pinned"
   }
 
@@ -157,16 +151,14 @@ BarWidget {
       implicitWidth: pinnedWidth + drawerBlockWidth
       implicitHeight: root.barSize
 
-      // Mask out the empty area the collapsed drawer reserves for its slide-in,
-      // so hovering it doesn't trigger expand and clicks pass through.
+      // mask the empty drawer area
       containmentMask: QtObject {
         function contains(point: point): bool {
           if (point.y < 0 || point.y > horizontalTrayRoot.height) return false
-          // Drawer reveals leftward; chevron sits at the right end when collapsed
-          // and slides left as it opens. The visible region starts at the chevron.
+          // drawer reveals leftward from the chevron
           var chevronX = root.drawerExtent - root.revealExtent
           if (point.x >= chevronX && point.x <= horizontalTrayRoot.drawerBlockWidth) return true
-          // Pinned items, placed to the right of the drawer block.
+          // pinned items, placed to the right of the drawer block
           var pinnedStart = horizontalTrayRoot.drawerBlockWidth
           return point.x >= pinnedStart && point.x <= horizontalTrayRoot.implicitWidth
         }
@@ -480,9 +472,7 @@ BarWidget {
     }
   }
 
-  // Renders a tray icon, recoloring symbolic icons to the bar foreground so
-  // they stay visible on any theme (a raw symbolic icon keeps its baked-in
-  // fill and disappears against a matching background).
+  // tray icon, tint symbolic icons to the foreground
   component TrayIcon: Item {
     id: trayIconRoot
     required property var icon
@@ -492,12 +482,11 @@ BarWidget {
       id: trayIconImage
       anchors.fill: parent
       fillMode: Image.PreserveAspectFit
-      // Decode at physical pixels: IconImage uses the logical size,
-      // which leaves PNG icons upscaled and blurry on HiDPI displays.
+      // decode at physical pixels for HiDPI
       sourceSize.width: Math.round(Math.min(width, height) * Screen.devicePixelRatio)
       sourceSize.height: Math.round(Math.min(width, height) * Screen.devicePixelRatio)
       source: root.trayIconSource(trayIconRoot.icon)
-      // Kept as a hidden layer so the effect can sample it as a texture.
+      // hidden layer the effect samples as a texture
       visible: !trayIconRoot.symbolic
       layer.enabled: trayIconRoot.symbolic
     }

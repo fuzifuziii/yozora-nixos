@@ -2,15 +2,7 @@ import Quickshell
 import QtQuick
 import qs.Commons
 
-// One row of a (possibly nested) context menu. Used both by Tray.qml's
-// top-level trayMenuColumn and by each TraySubmenu's own column, which is
-// what makes the nesting recursive/arbitrary-depth: a row with children
-// opens another TraySubmenu built out of more TrayMenuRow rows.
-//
-// Split into its own file (rather than an inline `component` in Tray.qml)
-// because TrayMenuRow <-> TraySubmenu reference each other, and QML's
-// inline-component syntax rejects that as a cycle. Sibling files in the
-// same directory can reference each other circularly without issue.
+// one row of a possibly nested context menu
 Item {
   id: menuRow
   required property var modelData
@@ -120,9 +112,7 @@ Item {
     }
   }
 
-  // Tear the submenu down if the whole menu gets dismissed (item picked
-  // deeper down, or the outside-click grab fired) rather than only via
-  // this row's own hover-out timer.
+  // tear down the submenu when the whole menu closes
   Connections {
     target: menuRow.ownerRoot
     function onTrayMenuOpenChanged() {
@@ -135,11 +125,7 @@ Item {
     active: false
     onActiveChanged: {
       if (active) {
-        // Loaded by URL (not `sourceComponent: TraySubmenu {...}`) on
-        // purpose: that would be a static type reference, and TraySubmenu.qml
-        // statically references TrayMenuRow right back — QML's type resolver
-        // rejects that as a cycle even across separate files. Loading by
-        // source string defers resolution to runtime, so no cycle.
+        // load by URL to avoid a QML type cycle
         setSource("TraySubmenu.qml", {
           ownerRoot: menuRow.ownerRoot,
           anchorItem: menuRow,

@@ -2,10 +2,7 @@ pragma Singleton
 import QtQuick
 import "BorderGeometry.js" as Geometry
 
-// Central border-spec factory for shell surfaces and controls. A spec carries
-// color, optional gradient, and top/right/bottom/left widths so renderers can
-// choose the cheap Rectangle path or the Shape-ring path without duplicating
-// theme parsing logic.
+// border-spec factory for surfaces and controls
 QtObject {
   id: root
 
@@ -126,9 +123,7 @@ QtObject {
     var color = primary.colors.length > 0 ? primary.colors[0] : fallback
     var gradient = primary.enabled ? primary : { colors: [], angle: 0, enabled: false }
 
-    // Backward compatibility for existing configs written during the separate
-    // border-gradient experiment. New configs put solid colors and gradients in
-    // the same border token.
+    // back-compat for old border-gradient configs
     if (!gradient.enabled && String(legacyGradientRaw || "").replace(/^\s+|\s+$/g, "").length > 0) {
       var legacy = resolvedGradient(legacyGradientRaw, color, opacity)
       if (legacy.enabled) gradient = legacy

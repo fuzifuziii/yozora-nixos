@@ -70,13 +70,11 @@ Item {
   }
 
   function applyPendingTheme() {
-    // Background polling can advance backgroundVersion while a theme switch is
-    // pending; the latest theme payload should still apply.
+    // apply the latest theme payload while a switch is pending
     if (pendingThemeVersion < 0) return
     pendingThemeFallbackTimer.stop()
     Color.loadColors(pendingColorsRaw)
-    // Color.loadShell also refreshes Style so the type scale flips with the
-    // background reveal instead of waiting for a separate reload path.
+    // loadShell also refreshes Style
     Color.loadShell(pendingShellRaw)
     Style.scheduleRefresh()
     pendingThemeVersion = -1
@@ -182,11 +180,7 @@ Item {
       visible: true
       anchors { top: true; bottom: true; left: true; right: true }
       color: "transparent"
-      // Keep render updates enabled. The background layer has been observed to
-      // lose its committed buffer while parked with updatesEnabled=false,
-      // leaving a black desktop until fuzi-shell is restarted. The wallpaper
-      // itself is static, so this favors correctness over a small render-loop
-      // optimization.
+      // keep render updates on, the buffer can be lost otherwise
       updatesEnabled: true
 
       property bool maskReady: false

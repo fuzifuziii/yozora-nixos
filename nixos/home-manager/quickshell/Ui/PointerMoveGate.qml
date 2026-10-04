@@ -1,10 +1,6 @@
 import QtQuick
 
-// Filters synthetic hover churn from moving delegates under a stationary
-// pointer. Call reset() after keyboard/list mutations, then moved() from a
-// row MouseArea's onPositionChanged before changing cursor selection. A
-// transition known to originate from the pointer can call allowInitialSample()
-// so the item under the stationary pointer remains selected.
+// filter synthetic hover jitter under a still pointer
 QtObject {
   id: root
 
@@ -40,8 +36,7 @@ QtObject {
       ? Math.abs(point.x - root.lastX) > root.threshold || Math.abs(point.y - root.lastY) > root.threshold
       : root.initialSampleAllowed
 
-    // Keep the previous accepted position while filtering jitter so slow,
-    // sub-threshold steps accumulate into deliberate pointer movement.
+    // keep the last accepted position so small steps accumulate
     if (firstSample || didMove) {
       root.lastX = point.x
       root.lastY = point.y

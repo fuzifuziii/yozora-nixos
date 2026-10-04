@@ -10,8 +10,7 @@ Panel {
   id: root
   moduleName: "fuzi.power"
   ipcTarget: "fuzi.power"
-  // manageIpc: false so this panel can own the single IpcHandler the target
-  // permits — needed for the togglePercentage method below.
+  // manageIpc false so the panel owns the single IpcHandler
   manageIpc: false
   property var batteryInfo: ({})
   property var systemInfo: ({})
@@ -20,9 +19,7 @@ Panel {
   property int profileIndex: 0
   property bool cursorActive: false
   readonly property bool showPercentage: setting("showPercentage", false) === true
-  // With the percentage shown the button paints a text block wider than an
-  // icon, so the open-panel mark takes the painted width instead of the
-  // icon-sized fraction of the slot the fallback assumes.
+  // open-panel mark takes the painted width with the percentage
   readonly property real openPanelIndicatorWidth: showPercentage && !button.vertical ? button.glyphPaintedWidth : 0
   readonly property bool batteryPresent: {
     var device = UPower.displayDevice
@@ -76,7 +73,7 @@ Panel {
   readonly property bool batteryFull: fullyCharged || (!root.discharging && batteryFraction >= 1)
   readonly property bool batteryFlowIdle: batteryFull || chargeThresholdActive
 
-  // 0..1 charge level, used by the visual progress bar.
+  // 0..1 charge level, used by the visual progress bar
   readonly property real batteryFraction: {
     var d = UPower.displayDevice
     return Model.batteryFraction(d)
@@ -91,8 +88,7 @@ Panel {
     return root.bar ? root.bar.foreground : Color.foreground
   }
 
-  // Cute agent-flavored phrases shown in the hero status line, rotated on a
-  // timer so the panel feels alive when current is flowing (either direction).
+  // rotating status phrases while current is flowing
   readonly property var chargingPhrases: [
     "Pumping power",
     "Injecting electrons",
@@ -117,7 +113,7 @@ Panel {
   ]
   property int phraseIndex: 0
 
-  // Whichever list is "active" given the current power state.
+  // list that is active for the current power state
   readonly property var activePhrases: {
     if (fullyCharged) return []
     if (charging) return chargingPhrases
@@ -142,8 +138,7 @@ Panel {
 
   function updateKeyValue(raw, targetName) {
     var next = Model.parseKeyValue(raw)
-    // Keep last known good data if a refresh briefly returns nothing — happens
-    // around AC plug/unplug events. Avoids the section collapsing mid-transition.
+    // keep the last good data across AC plug/unplug
     if (Object.keys(next).length === 0) return
     if (targetName === "battery") batteryInfo = next
     else systemInfo = next
@@ -151,8 +146,7 @@ Panel {
 
   function updateProfiles(raw) {
     var parsed = Model.parseProfiles(raw, profileIndex)
-    // Same guard as battery: preserve the last known profile list across
-    // transient empty payloads so the buttons don't blink out.
+    // keep the last profile list across empty payloads
     if (parsed.profiles.length === 0) return
     profiles = parsed.profiles
     activeProfile = parsed.activeProfile
@@ -230,9 +224,7 @@ Panel {
 
   Timer { interval: 5000; running: root.opened; repeat: true; onTriggered: root.refresh() }
 
-  // Rotate the status phrase while the panel is open and we're in a
-  // rotating state (charging or on battery). The text swap is wrapped in a
-  // fade so the changeover reads as one organism rather than a hard cut.
+  // rotate the status phrase with a fade while open
   Timer {
     id: phraseTimer
     interval: 2800
@@ -260,9 +252,7 @@ Panel {
     }
   }
 
-  // If we leave a rotating state mid-swap, halt the animation and snap back
-  // to full opacity so "FULLY CHARGED" is legible immediately rather than
-  // appearing dimmed.
+  // snap back to full opacity when leaving a rotating state
   Connections {
     target: root
     function onRotatingPhrasesChanged() {
@@ -404,7 +394,7 @@ Panel {
             Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
             Behavior on color { ColorAnimation { duration: 220 } }
 
-            // Subtle pulse while charging — visible signal that energy is flowing in.
+            // subtle pulse while charging
             SequentialAnimation on opacity {
               running: root.charging && !root.fullyCharged && root.opened
               loops: Animation.Infinite
@@ -415,12 +405,7 @@ Panel {
           }
         }
 
-        // ---------- Stats ----------
-        // Visibility is intentionally only gated by "we've ever loaded data" so
-        // the section never collapses mid-transition. fullyCharged is *not* part
-        // of the condition: UPower briefly reports FullyCharged on plug-in when
-        // the battery sits above the charge-control start threshold, and we
-        // refuse to flicker the whole panel for that ~1s window.
+        // ---- stats
         Row {
           visible: root.batteryInfo.percentage !== undefined
           width: parent.width

@@ -3,8 +3,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Cascading submenu drawn inside the fullscreen host window (no xdg_popup).
-// Rows are TrayMenuRow, so nesting works to any depth.
+// cascading submenu drawn inside the host window
 Item {
   id: subRoot
   required property QtObject ownerRoot
@@ -14,7 +13,7 @@ Item {
   readonly property bool pointerInside: subHover.hovered
   property bool open: false
 
-  // Attached contentItem is the real window root (PopupCard shadows window.contentItem)
+  // attached contentItem is the real window root
   readonly property Item hostRoot: anchorItem && anchorItem.QsWindow ? anchorItem.QsWindow.contentItem : null
   readonly property real cardPad: Style.space(8)
 
@@ -23,16 +22,16 @@ Item {
   width: rowWidth
   height: subCard.contentHeightHint
 
-  // Reparent into the host window so coordinates are window-local
+  // reparent into the host window for window-local coordinates
   parent: hostRoot
 
-  // Place the card to the left of the parent card, aligned with the row
+  // place left of the parent card, aligned with the row
   function reposition() {
     if (!anchorItem || !hostRoot) return
     var p = anchorItem.mapToItem(hostRoot, 0, 0)
     var nx = p.x - cardPad - width + 1
     var ny = p.y - cardPad
-    // Flip to the right side if there is no room on the left
+    // flip to the right side if there is no room on the left
     if (nx < 0) nx = p.x + anchorItem.width + cardPad - 1
     ny = Math.max(0, Math.min(ny, hostRoot.height - height))
     x = Math.round(nx)
@@ -58,7 +57,7 @@ Item {
 
     readonly property real contentHeightHint: subColumn.implicitHeight + padding * 2
 
-    // Swallow clicks so the outside-click catcher does not close the menu
+    // swallow clicks so the menu stays open
     MouseArea {
       anchors.fill: parent
       onClicked: {}

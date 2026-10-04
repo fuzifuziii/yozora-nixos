@@ -3,37 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 
-// Layer-shell popup attached to a bar widget icon, designed for
-// click-driven AND keyboard-driven panels (e.g. SUPER+CTRL+W summon).
-//
-// Built on PanelWindow with a brief WlrKeyboardFocus.Exclusive prime followed
-// by OnDemand rather than PopupWindow (xdg-popup). The prime acquires focus
-// both when the surface maps and when it reopens while still mapped for its
-// fade-out. xdg-popups don't get that — they only receive keys after a
-// click/hover routes focus through their parent surface — so keyboard-summoned
-// popups fell flat without it.
-//
-// Exclusive would also grant map-time focus, but it makes Hyprland route
-// *every* pointer event to the exclusive surface no matter which output
-// the cursor is over, which leaves clicks on any other monitor unable to
-// reach the dismissal surfaces below.
-//
-// API is a subset of Common.PopupCard: anchorItem, owner, bar, open,
-// padding, margin, contentWidth/Height, centerOnBar, default contentItem.
-// Missing on purpose (for now): triggerMode ("hover"), containsMouse.
-//
-// Positioning: full-screen layer-shell with the card placed inside at
-// `cardOrigin`. We use the bar window's height/width for the perpendicular
-// axis (away-from-bar) because mapToItem on the anchor returns
-// bar-content-relative coords with internal layout offsets baked in
-// (e.g. ~13px from the bar's vertical centering of its widget row). The
-// parallel axis (along-the-bar) uses the anchor's content x/y since the
-// bar spans full screen on that axis.
-//
-// Outside-click dismissal: an overlay MouseArea catches clicks, with the
-// QsWindow.mask subtracting the bar strip so clicks on the bar still
-// reach the bar widgets (activePopout coordinator hands off to another
-// popup if the user clicks a different bar icon).
+// layer-shell popup attached to a bar widget icon
 PanelWindow {
   id: root
 
@@ -52,12 +22,7 @@ PanelWindow {
   property bool popoutSwitchClosing: false
   property bool focusPrimed: false
 
-  // Item that should take keyboard focus once the panel maps. Typically a
-  // PanelKeyCatcher inside the panel content. Layer-shell grants focus to the
-  // surface during the Exclusive prime, but Qt still needs an active-focus
-  // target inside the surface for Keys.onPressed handlers to fire. Schedule
-  // the focus through Qt.callLater so it runs after the surface is fully
-  // mapped and child items have completed layout.
+  // item that takes keyboard focus once the panel maps
   property Item focusTarget: null
 
   default property alias contentItem: contentHolder.children
@@ -84,28 +49,14 @@ PanelWindow {
 
   WlrLayershell.namespace: "fuzi-keyboard-panel"
   WlrLayershell.layer: WlrLayer.Top
-  // Keyboard focus follows `open` (NOT `visible`). The window remains
-  // mapped during the fade-out so the opacity animation has something to
-  // animate, but keyboard/click ownership must release the moment the
-  // logical close fires — otherwise the user is locked out for 140ms.
-  //
-  // Prime with Exclusive on every open, then settle on OnDemand. Hyprland
-  // focuses OnDemand when a surface first maps, but not when an already-mapped
-  // fade-out surface changes from None back to OnDemand. Exclusive also takes
-  // focus when the previously focused application has constrained the pointer.
-  // The brief prime covers both cases; OnDemand then releases compositor-wide
-  // pointer hit-testing so clicks can reach the dismissal windows below.
+  // keyboard focus follows open, not visible
   WlrLayershell.keyboardFocus: open
     ? (focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
     : WlrKeyboardFocus.None
 
   onBackingWindowVisibleChanged: beginFocusPrime()
 
-  // Full-screen layer-shell. The visible card is positioned inside via
-  // `cardOrigin`. The `mask` below makes the bar area click-through (so
-  // the user can click another bar icon while the panel is open and the
-  // activePopout coordinator swaps to that popup); everywhere else, the
-  // overlay catches the click and dismisses via the MouseArea below.
+  // full-screen layer-shell, bar area is click-through
   anchors {
     top: true
     bottom: true
@@ -113,9 +64,7 @@ PanelWindow {
     right: true
   }
 
-  // Clickable region is the whole screen. Clicks in the bar strip are
-  // forwarded to registered bar buttons so switching between panel icons
-  // works in one click even when the overlay surface is above the bar.
+  // forward bar-strip clicks to registered bar buttons
   readonly property real _barStripSize: {
     if (!bar) return 0
     var actual = (root.barPos === "top" || root.barPos === "bottom") ? root.barH : root.barW
@@ -126,21 +75,14 @@ PanelWindow {
     height: root.screenH
   }
 
-  // Track every layout change between the bar's contentItem and the
-  // anchor item. `transform` updates whenever any item in that chain
-  // moves/resizes, which is what makes the position binding below
-  // actually reactive — mapToItem on its own is a one-shot.
+  // track layout changes so the position binding is reactive
   TransformWatcher {
     id: anchorWatcher
     a: anchorWindow ? anchorWindow.contentItem : null
     b: anchorItem
   }
 
-  // Anchor item's position within the bar's content surface. For a
-  // full-width top bar, the content x maps directly to screen x; the y
-  // returned here has the bar's internal padding baked in (e.g. ~13px
-  // from vertical centering of the widget row), which is why `cardOrigin`
-  // below uses `barH` for the perpendicular axis instead of this y.
+  // anchor item position within the bar content
   readonly property point anchorScreenPos: {
     anchorWatcher.transform  // reactive dependency
     if (!anchorItem || !anchorWindow) return Qt.point(0, 0)
@@ -178,17 +120,7 @@ PanelWindow {
     return Math.round(Math.min(desired, maxHeight))
   }
 
-  // Desired top-left of the card in screen coordinates. For the
-  // perpendicular axis (away-from-bar) we anchor to the bar window's edge
-  // directly — not the anchor item's y/x — because mapToItem(barContent)
-  // returns coordinates in the bar's content space, which can be offset
-  // from the bar surface's screen-anchored corner by internal layout
-  // (centering wrappers, padding). The bar's surface IS aligned to its
-  // anchored screen edge, so using `barW`/`barH` gives the right edge
-  // regardless of how the bar's internal widgets are positioned. For the
-  // parallel axis (along the bar) the anchor item's reported position is
-  // still consistent with the bar content origin, so it's accurate for
-  // centering the card under the icon.
+  // card top-left in screen coordinates
   readonly property real barW: anchorWindow ? anchorWindow.width : screenW
   readonly property real barH: anchorWindow ? anchorWindow.height : 0
   readonly property point cardOrigin: {
@@ -221,8 +153,7 @@ PanelWindow {
 
   // --- popout coordination (same-bar single-popout model) -----------------
 
-  // Coordinate on `open`, not `visible`. `visible` lags into the fade-out
-  // animation, which made ownership transfer to a sibling popup race.
+  // coordinate on open, not visible
   onOpenChanged: {
     if (open) {
       focusPrimed = false
@@ -250,10 +181,7 @@ PanelWindow {
 
   Timer {
     id: focusPrimeTimer
-    // Leave enough time for multiple Qt/Wayland commit cycles after the
-    // backing window becomes visible while keeping the compositor-wide
-    // Exclusive phase imperceptibly short. This interval is covered by the
-    // immediate hide/re-summon acceptance case.
+    // keep the Exclusive keyboard phase short
     interval: 75
     onTriggered: if (root.open) root.focusPrimed = true
   }
@@ -272,11 +200,7 @@ PanelWindow {
 
   // --- outside-click dismissal --------------------------------------------
 
-  // Catches clicks anywhere in the clickable region (i.e. everywhere on
-  // screen except the bar strip, which is masked out). The card has its
-  // own MouseArea below so clicks on it don't bubble up here. Disabled
-  // during the fade-out so the dying overlay doesn't swallow clicks that
-  // were meant for the apps behind it.
+  // catch clicks outside the card, off during fade-out
   MouseArea {
     anchors.fill: parent
     enabled: root.open
@@ -323,22 +247,13 @@ PanelWindow {
     onPositionChanged: function(mouse) { hoveringBar = inBarRegion(mouse.x, mouse.y) }
     onExited: hoveringBar = false
     onClicked: function(mouse) {
-      // While Exclusive is priming, Hyprland may route a click from another
-      // output here with translated coordinates. Never interpret that as a
-      // click on this output's bar.
+      // ignore translated clicks from another output while priming
       if (root.focusPrimed && inBarRegion(mouse.x, mouse.y) && forwardBarClick(mouse.x, mouse.y, mouse.button)) return
       root.close()
     }
   }
 
-  // The panel surface only spans the anchor's screen, and the compositor
-  // hit-tests pointer input per output, so `dismissArea` above can never see
-  // a click on another monitor. Give every other output a transparent twin
-  // whose only job is to catch that click. They exist only while the panel is
-  // logically open (not during the fade-out, matching `dismissArea.enabled`).
-  //
-  // Keyboard focus is None: these must catch the pointer without taking focus
-  // from the panel when the cursor merely crosses onto their output.
+  // transparent twin on other outputs to catch outside clicks
   Variants {
     model: root.open ? Quickshell.screens : []
 
@@ -347,8 +262,7 @@ PanelWindow {
         required property var modelData
 
         screen: modelData
-        // Compare by output name: the anchor screen must be known before any
-        // twin maps, or a twin would cover the panel's own output.
+        // compare by output name
         visible: root.open && !!root.screen && modelData.name !== root.screen.name
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
@@ -392,8 +306,7 @@ PanelWindow {
       NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
     }
 
-    // Swallow clicks on the card so they don't bubble to the dismissal
-    // MouseArea behind us.
+    // swallow clicks on the card
     MouseArea {
       anchors.fill: parent
       acceptedButtons: Qt.AllButtons

@@ -94,16 +94,9 @@ function mergeMenuSources(defaultItems, userItems) {
   }
 }
 
-// Both merges below return fresh items/itemOrder objects for the caller to
-// assign in one go. They must never write into the maps they are handed: those
-// live in QML `var` properties, and an in-place write into such an object is
-// occasionally dropped by the engine — the key lands with an undefined value.
-// A lost write used to leave an id in itemOrder with no item behind it, and
-// the next merge then kept that orphan and appended a second row for the same
-// app, so the launcher listed it twice (and again on every later rescan).
+// merges return fresh objects, never mutate inputs
 
-// Swaps every app row for the current set. Rows keep the order they arrive in;
-// ids already claimed (including duplicate desktop ids) are listed once.
+// swap all app rows for the current set
 function mergeAppRows(items, itemOrder, appRows) {
   var source = items || ({})
   var order = Array.isArray(itemOrder) ? itemOrder : []
@@ -114,8 +107,7 @@ function mergeAppRows(items, itemOrder, appRows) {
   for (var i = 0; i < order.length; i++) {
     var id = order[i]
     var existing = source[id]
-    // Orphans (an id with no item) are dropped rather than carried forward,
-    // so a single lost write cannot compound into a duplicate row.
+    // drop orphan ids to avoid duplicate rows
     if (!existing || existing.kind === "app") continue
     nextItems[id] = existing
     nextOrder.push(id)
@@ -132,10 +124,7 @@ function mergeAppRows(items, itemOrder, appRows) {
   return { items: nextItems, itemOrder: nextOrder }
 }
 
-// Swaps the rows one provider contributed, leaving every other item untouched.
-// Rows carry the id of the submenu that produced them, so a provider that runs
-// again drops its previous batch — a plugin that was just enabled disappears
-// from the Enable list — without disturbing static children declared in JSONC.
+// swap the rows of one provider
 function swapProviderRows(items, itemOrder, menuId, rows) {
   var source = items || ({})
   var order = Array.isArray(itemOrder) ? itemOrder : []
@@ -313,8 +302,7 @@ function searchScore(items, entry, query) {
   var score = 80
 
   if (label === needle) score = entry.parent === "root" ? 2 : 0
-  // An installed app whose name contains the query as a whole word ("zen"
-  // for Zen Browser) beats exact-labeled menu entries like Install > Zen.
+  // whole-word app match beats exact menu entries
   else if (entry.kind === "app" && label.split(/\s+/).indexOf(needle) >= 0) score = 0
   else if (label.indexOf(needle) === 0) score = 10
   else if (label.indexOf(needle) >= 0) score = 30
@@ -322,8 +310,7 @@ function searchScore(items, entry, query) {
   else if (descriptionTextMatches(needle, descriptionText)) score = 60
 
   if (entry.kind === "menu" || entry.kind === "link") score -= 2
-  // App rows sort after all menu items, so they lose the tiebreak below to an
-  // equal match. Outrank those, but stay inside the tier so better ones win.
+  // outrank menu items within the app tier
   if (entry.kind === "app") score -= 5
 
   return score * 1000 + depthFor(items, entry.id) * 25 + entry.order

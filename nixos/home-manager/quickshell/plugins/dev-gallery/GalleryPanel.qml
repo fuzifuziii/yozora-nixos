@@ -4,14 +4,7 @@ import Quickshell
 import qs.Ui
 import qs.Commons
 
-// Visual reference + live playground for fuzi-shell's common UI
-// components. Summon with `fuzi dev ui-preview`, or directly via:
-//   fuzi-shell shell summon fuzi.dev-gallery "{}"
-//
-// Every section here renders the REAL component (not a copy) so the
-// gallery doubles as a smoke test. When you add a new common component,
-// add a section here. Maintenance discipline: this file should ONLY use
-// imported common components, never inline reimplementations of them.
+// live playground for the common UI components
 Item {
   id: root
 
@@ -22,11 +15,7 @@ Item {
     closingFromHost = false
     window.visible = true
 
-    // Optional { section: "button" } in the payload lets `fuzi dev
-    // ui-preview <section>` open the gallery with the cursor already on
-    // a specific component, so iterating on one widget doesn't require
-    // scrolling from the top each time. Unknown section names are
-    // ignored — the gallery opens at its default position.
+    // payload section opens the gallery on that component
     var requested = ""
     if (payloadJson) {
       try {
@@ -35,9 +24,7 @@ Item {
       } catch (e) { /* ignore */ }
     }
 
-    // Defer the section assignment + focus so the FloatingWindow's
-    // content tree is mounted. The hasCursor bindings on each demo
-    // target then scroll themselves into view via onHasCursorChanged.
+    // defer section and focus until the content is mounted
     Qt.callLater(function() {
       if (requested && visibleSections.indexOf(requested) !== -1) {
         focusSection = requested
@@ -47,16 +34,14 @@ Item {
     })
   }
 
-  // Host-initiated close (`shell hide`). Visibility flips without
-  // notifying the host back — it already knows.
+  // host-initiated close, host already knows
   function close() {
     closingFromHost = true
     window.visible = false
     closingFromHost = false
   }
 
-  // User-initiated close (Esc, window close button). Tell the shell so its
-  // openPanelIds map stays consistent and `toggle` works on the next call.
+  // user-initiated close, tell the shell
   function requestClose() {
     if (shell && typeof shell.hide === "function") shell.hide("fuzi.dev-gallery")
     else window.visible = false
@@ -72,7 +57,7 @@ Item {
   readonly property color urgent: Color.urgent
   readonly property string fontFamily: "monospace"
 
-  // Fake `bar` for components that take a whole bar object (e.g. Slider).
+  // fake bar for components that take a bar object
   readonly property var fakeBar: QtObject {
     readonly property color foreground: root.foreground
     readonly property color background: root.background
@@ -83,25 +68,11 @@ Item {
     readonly property int barSize: 26
   }
 
-  // ---- cursor model -------------------------------------------------------
-  //
-  // The gallery itself uses the same recipe wifi / audio / bluetooth /
-  // monitor panels use: focusSection + selectedIndex drive a single
-  // highlight that crosses kit primitives uniformly, with j/k walking
-  // targets (jumping section boundaries automatically), h/l acting
-  // locally (horizontal rows / slider adjustment), Enter activating, and
-  // Esc closing. Mouse hover updates the same (focusSection,
-  // selectedIndex) so keyboard and pointer never diverge.
-  //
-  // Plugin authors: copy this section verbatim as a template. Replace
-  // the section IDs with whatever your panel needs. The shape
-  // (visibleSections, sectionCount, sectionIsHorizontal,
-  // sectionAdjustsValue, moveCursor, moveCursorH, activateCursor,
-  // ensureCursorVisible, clampCursor) is the canonical pattern.
+  // ---- cursor model
   property string focusSection: "cursor-surface"
   property int selectedIndex: 0
 
-  // Demo state mutated by interaction.
+  // demo state mutated by interaction
   property string choiceDemoValue: "top"
   property bool toggleDemoOn: true
   property bool toggleSquareOn: false
@@ -136,8 +107,7 @@ Item {
     return 0
   }
 
-  // True for sections whose primitives lay out horizontally (a row of
-  // buttons) — j/k jumps to the next/prev section, h/l walks within the row.
+  // horizontal sections, h/l walks inside the row
   function sectionIsHorizontal(section) {
     return section === "button"
       || section === "button-group"
@@ -145,12 +115,12 @@ Item {
       || section === "toggle-switch"
   }
 
-  // True for sections where h/l should adjust a value rather than walk.
+  // sections where h/l adjusts a value
   function sectionAdjustsValue(section) {
     return section === "slider"
   }
 
-  // Where to land when entering a section from above / below.
+  // landing index when entering a section
   function sectionFirstIndex(section) { return 0 }
   function sectionLastIndex(section) { return Math.max(0, sectionCount(section) - 1) }
 
@@ -164,8 +134,7 @@ Item {
     }
     if (sectionIsHorizontal(focusSection) || sectionAdjustsValue(focusSection)
         || sectionCount(focusSection) <= 1) {
-      // Single-row / horizontal / value-adjust sections: j/k crosses to
-      // the next section.
+      // j/k crosses to the next section
       if (delta > 0 && sIdx < sections.length - 1) {
         focusSection = sections[sIdx + 1]
         selectedIndex = sectionFirstIndex(focusSection)
@@ -175,7 +144,7 @@ Item {
       }
       return
     }
-    // Vertical multi-row section: walk within, then cross at boundaries.
+    // vertical multi-row section, cross at boundaries
     var next = selectedIndex + delta
     if (next < 0) {
       if (sIdx > 0) {
@@ -194,7 +163,7 @@ Item {
 
   function moveCursorH(delta) {
     if (sectionAdjustsValue(focusSection)) {
-      // h/l on the slider section nudges the demo volume by 5%.
+      // h/l on the slider section nudges the demo volume by 5%
       sliderRow.demoVolume = Math.max(0, Math.min(1, sliderRow.demoVolume + delta * 0.05))
       return
     }
@@ -219,7 +188,7 @@ Item {
       return
     }
     if (focusSection === "toggle-switch") {
-      // The busy switch swallows activation the same way it swallows clicks.
+      // busy switch swallows activation like clicks
       if (selectedIndex === 0) root.switchDemoOn = !root.switchDemoOn
       return
     }
@@ -240,8 +209,7 @@ Item {
       numberDemo.field.forceActiveFocus()
       return
     }
-    // pill / panel-action-button / cursor-surface / composed: nothing to
-    // mutate in a demo, but real consumers would call their clicked().
+    // nothing to mutate in a demo
   }
 
   function clampCursor() {
@@ -256,9 +224,7 @@ Item {
     if (selectedIndex > max) selectedIndex = max
   }
 
-  // Scroll the gallery so the given Item is fully visible inside
-  // scrollArea's viewport, with a 20px breathing margin. Wired into the
-  // hasCursor change handler of every cursor target below.
+  // scroll the item into view with a 20px margin
   function ensureCursorVisible(item) {
     if (!item || !scrollArea) return
     var flick = scrollArea.contentItem
@@ -299,8 +265,7 @@ Item {
         sb.position = Math.max(0, Math.min(1 - sb.size, newPos))
       }
 
-      // Page/Home/End handled here so they bubble up past keyCatcher
-      // (which only consumes Esc / Enter / j-k-h-l / x / text keys).
+      // let Page/Home/End bubble past keyCatcher
       Keys.priority: Keys.AfterItem
       Keys.onPressed: function(event) {
         if (event.key === Qt.Key_PageDown) {
@@ -317,12 +282,7 @@ Item {
         }
       }
 
-      // Panel-style key dispatch — the gallery demonstrates the standard,
-      // so it USES the standard. j/k walks cursor targets across sections,
-      // h/l acts locally (rows + slider adjust), Enter activates the
-      // current target, Esc closes. The catcher suspends itself while a
-      // dropdown popup or text field owns keyboard input, so typing into
-      // the embedded controls doesn't double-drive the panel cursor.
+      // standard panel key dispatch, j/k across sections
       PanelKeyCatcher {
         id: keyCatcher
         anchors.fill: parent
@@ -490,9 +450,7 @@ Item {
                   font.bold: true
                 }
 
-                // Every Style.font.* token rendered at its actual size. The
-                // model is data, not a Component graph, so this list stays
-                // in lockstep with the singleton without manual upkeep.
+                // every Style.font token at its real size
                 Repeater {
                   model: [
                     { key: "caption",      size: Style.font.caption,      sample: "Section header text" },
@@ -880,9 +838,7 @@ Item {
                 anchors.leftMargin: Style.space(14)
                 spacing: Style.space(16)
 
-                // Each demo Button is paired with a caption labeling the
-                // state(s) it exercises so the section reads as one Button
-                // showing its flag combinations side by side.
+                // each demo button has a caption for its state
 
                 Column {
                   spacing: Style.space(6)

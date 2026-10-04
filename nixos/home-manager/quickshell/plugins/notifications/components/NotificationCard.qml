@@ -1,6 +1,4 @@
-// Notification card. Pure presentational — no service, Notification, or
-// ListModel references. The popup container drives lifetime; the history
-// panel drives static rendering. Both use the same component.
+// presentational notification card, no service refs
 
 import QtQuick
 import QtQuick.Layouts
@@ -17,25 +15,21 @@ BorderSurface {
   property string summary: ""
   property string body: ""
   property string image: ""
-  // Nerd Font glyph rendered in the icon slot when no real icon is set.
-  // Used by fuzi-notification-send so user-action toasts (`Silenced
-  // notifications` etc.) show their bell/lock/etc. glyph without leaking
-  // into the summary text.
+  // glyph shown in the icon slot when no icon is set
   property string glyph: ""
-  // NotificationUrgency: Low=0, Normal=1, Critical=2 (upstream).
+  // urgency: low 0, normal 1, critical 2
   property int urgency: 1
   property double timestamp: 0
   property int cornerRadius: 0
 
-  // System monospace font injected by the container.
+  // system monospace font injected by the container
   property string fontFamily: ""
 
   readonly property bool hovered: hoverTracker.hovered
 
   signal closeRequested()
   signal cardClicked()
-  // Prefer per-notification media/avatar data, then fall back to the app icon.
-  // The `check` flag avoids Qt's missing-texture placeholder for unknown names.
+  // prefer media or avatar data, fall back to the app icon
   readonly property string smallIconSource: image.length > 0 ? image : iconSource(appIcon)
   readonly property bool hasGlyph: glyph.length > 0
   readonly property bool compactGlyph: NotificationLogic.shouldRenderCompactGlyph(glyph, smallIconSource, singleLineToast)
@@ -63,8 +57,7 @@ BorderSurface {
   }
 
   implicitWidth: Style.space(380)
-  // Add vertical border insets so mainColumn (inset by border on top/left/right)
-  // doesn't push content under the bottom edge.
+  // add vertical border insets to mainColumn
   implicitHeight: mainColumn.implicitHeight + borderTop + borderBottom
   radius: cornerRadius
   color: Color.notifications.background
@@ -88,8 +81,7 @@ BorderSurface {
 
   ColumnLayout {
     id: mainColumn
-    // Inset by the card border so the content doesn't paint over the card's
-    // outer border.
+    // inset by the card border
     anchors.top: parent.top
     anchors.left: parent.left
     anchors.right: parent.right
@@ -98,7 +90,7 @@ BorderSurface {
     anchors.rightMargin: root.borderRight
     spacing: 0
 
-    // Text content.
+    // text content
     RowLayout {
       Layout.fillWidth: true
       Layout.leftMargin: Style.space(12)
@@ -112,9 +104,7 @@ BorderSurface {
         Layout.preferredWidth: visible ? Style.space(40) : 0
         Layout.preferredHeight: visible ? Style.space(40) : 0
         Layout.alignment: Qt.AlignVCenter
-        // Hide the slot when the icon failed to resolve (themed-icon name
-        // not in the user's icon theme) AND we don't have a glyph fallback
-        // — prevents rendering Qt's pink broken-image placeholder.
+        // hide the slot when the icon is unresolved and no glyph
         visible: !root.collapseRedundantIcon && !root.compactGlyph && (root.hasSmallIcon || root.hasGlyph) && (root.hasGlyph || smallIconImage.status !== Image.Error)
 
         Image {
@@ -129,8 +119,7 @@ BorderSurface {
           visible: !root.hasGlyph || smallIconImage.status === Image.Ready
         }
 
-        // Glyph fallback (Nerd Font character) when no image icon is
-        // available. Used by fuzi-notification-send's `-g` flag.
+        // glyph fallback when no image icon is available
         Text {
           anchors.centerIn: parent
           visible: root.hasGlyph && smallIconImage.status !== Image.Ready

@@ -2,8 +2,7 @@ pragma Singleton
 import Quickshell
 import QtQuick
 
-// Shared utility helpers used across plugins. Pure functions only — no
-// state. Anything stateful belongs on Color, Style, or a service.
+// pure shared helpers, no state
 QtObject {
   id: root
 
@@ -18,9 +17,7 @@ QtObject {
   }
 
   function wheelSteps(accumulator, delta) {
-    // Some mouse/compositor combinations scale a single notch well beyond
-    // Qt's conventional 120 units. Keep one event to one step while still
-    // accumulating the smaller deltas emitted by touchpads.
+    // one wheel event is one step, accumulate touchpad deltas
     delta = Math.max(-120, Math.min(120, delta))
     if (accumulator * delta < 0) accumulator = 0
     var total = accumulator + delta
@@ -28,8 +25,7 @@ QtObject {
     return { steps: steps, remainder: total - steps * 120 }
   }
 
-  // Compose a base color with an opacity. Accepts a color object or a hex
-  // string; null/undefined yields transparent black at the requested alpha.
+  // compose a color with an opacity
   function alpha(c, opacity) {
     var a = clampAlpha(opacity)
     if (!c) return Qt.rgba(0, 0, 0, a)
@@ -37,15 +33,13 @@ QtObject {
     return Qt.rgba(c.r, c.g, c.b, a)
   }
 
-  // file:// URL with each path segment percent-encoded so spaces and
-  // special chars in user paths don't break Image.source.
+  // file:// URL with percent-encoded path segments
   function fileUrl(path) {
     if (!path) return ""
     return "file://" + String(path).split("/").map(encodeURIComponent).join("/")
   }
 
-  // Single-quote a string for bash. The replace handles embedded single
-  // quotes by closing, escaping, and re-opening the literal.
+  // single-quote a string for bash
   function shellQuote(value) {
     return "'" + String(value || "").replace(/'/g, "'\\''") + "'"
   }
@@ -62,8 +56,7 @@ QtObject {
     return String(id || "")
   }
 
-  // Best-effort base64 decode. Returns "" on parse failure rather than
-  // surfacing garbage downstream.
+  // best-effort base64 decode
   function decodeBase64(value) {
     var s = String(value || "")
     if (!s) return ""
@@ -74,9 +67,7 @@ QtObject {
     return JSON.parse(JSON.stringify(value === undefined ? null : value))
   }
 
-  // Parse the last line of a custom-module / indicator process output as
-  // waybar-style JSON ({text, class, tooltip, ...}). Falls back to {text: raw}
-  // when the output isn't JSON, and {} for empty output.
+  // parse the last output line as waybar-style JSON
   function parseModuleJson(raw) {
     var text = String(raw || "").trim()
     if (!text) return {}
@@ -88,23 +79,17 @@ QtObject {
     }
   }
 
-  // Standard Qt text-editing keys shared by every searchable panel's filter:
-  //   Backspace       delete previous character
-  //   Ctrl+Backspace  delete previous word (Qt DeleteStartOfWord)
-  //   Ctrl+U          clear the whole field
-  // True only when the event would actually change the text, so an empty
-  // filter never swallows the key — panels keep their own empty-filter
-  // fallbacks (e.g. menu back-navigation) in later branches.
+  // text-editing keys shared by filter fields
   function editsFilter(event, text) {
     if (!text) return false
-    // Alt/Meta-modified sequences belong to other shortcuts — never edit here.
+    // leave Alt/Meta sequences to other shortcuts
     if (event.modifiers & (Qt.AltModifier | Qt.MetaModifier)) return false
     if (event.key === Qt.Key_U)                     // Ctrl+U only (not Ctrl+Shift+U → Unicode input)
       return event.modifiers === Qt.ControlModifier
     return event.key === Qt.Key_Backspace           // plain, Shift, or Ctrl Backspace
   }
 
-  // New filter text after applying an edit key. Assumes editsFilter(event, text).
+  // new filter text after an edit key
   function editedFilter(event, text) {
     if (event.key === Qt.Key_U) return ""                        // Ctrl+U: clear
     if (event.modifiers & Qt.ControlModifier)                    // Ctrl+Backspace: word
@@ -112,9 +97,7 @@ QtObject {
     return text.slice(0, -1)                                     // Backspace: char
   }
 
-  // Layout normalization shared by bar config consumers
-  // so the two never drift. Entries are deep-cloned to decouple from the
-  // input config; consumers can mutate without leaking back to shell.json.
+  // normalize bar layout, deep-clone entries
   function normalizeLayoutEntry(entry) {
     if (typeof entry === "string") return { id: canonicalWidgetId(entry) }
     if (isPlainObject(entry) && entry.id) {

@@ -6,12 +6,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 
-// Centered speed test overlay. No card: like the Tucson's floating cluster,
-// the two dials (download left, upload right) sit directly on a darkened
-// scrim -- open 270° arcs, faint tick rings, hubless gradient needles, and a
-// digital readout in the middle. Esc, the scrim, or the corner dismiss close
-// it; the needles sweep to full scale and back on open, then track the live
-// readings.
+// centered speed test overlay, dials on a scrim
 PanelWindow {
   id: root
 
@@ -38,8 +33,7 @@ PanelWindow {
   }
 
   visible: open
-  // The window is instantiated hidden, so re-acquire focus after mapping and
-  // fire the ignition sweep once the surface is actually on screen.
+  // re-acquire focus after mapping, then run the ignition sweep
   onOpenChanged: {
     if (open) Qt.callLater(function() {
       if (!root.open) return
@@ -56,9 +50,7 @@ PanelWindow {
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
-  // Deep scrim: with no card behind them, the floating dials need the
-  // backdrop to carry the contrast on any wallpaper, like the near-black
-  // panel behind a real cluster.
+  // deep scrim carries the contrast
   Rectangle {
     anchors.fill: parent
     color: Qt.rgba(0, 0, 0, 0.78)
@@ -82,13 +74,12 @@ PanelWindow {
       anchors.centerIn: parent
       width: content.implicitWidth
       height: content.implicitHeight
-      // Narrow or heavily scaled outputs: shrink the whole cluster rather
-      // than clipping it at the screen edge.
+      // shrink the cluster on narrow or scaled outputs
       scale: Math.min(1,
         (keyCatcher.width - Style.space(32)) / Math.max(1, width),
         (keyCatcher.height - Style.space(32)) / Math.max(1, height))
 
-      // Swallow clicks so only the scrim outside the cluster dismisses.
+      // swallow clicks, only the outside scrim dismisses
       MouseArea { anchors.fill: parent; onClicked: {} }
 
       ColumnLayout {
@@ -127,8 +118,7 @@ PanelWindow {
           }
         }
 
-        // Centered on the dial pair. Fades rather than unmounts while a run
-        // is in flight, so the cluster never shifts.
+        // centered on the dial pair, fades during a run
         Button {
           text: "Run Again"
           tooltipText: "Measure again via fast.com"
@@ -163,11 +153,7 @@ PanelWindow {
     }
   }
 
-  // One floating cluster dial: an open 270° scale with the gap at the
-  // bottom, a faint tick ring, a glowing accent value arc, a hubless needle
-  // that fades toward the pivot, and a digital readout in the middle. All
-  // writes to the needle funnel through `shown` so the ignition sweep and
-  // live readings share one animation.
+  // one floating cluster dial
   component SpeedDial: Item {
     id: dial
 
@@ -176,7 +162,7 @@ PanelWindow {
     required property bool live
 
     readonly property real diameter: Style.space(210)
-    // 0° = 3 o'clock, increasing clockwise (PathAngleArc's convention).
+    // 0 degrees is 3 o'clock, clockwise
     readonly property real dialStart: 135
     readonly property real dialSweep: 270
     readonly property int tickCount: 46
@@ -185,12 +171,11 @@ PanelWindow {
     readonly property color trackColor: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.14)
     readonly property color minorTickColor: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.12)
     readonly property color majorTickColor: Qt.rgba(root.bar.foreground.r, root.bar.foreground.g, root.bar.foreground.b, 0.3)
-    // The dial that isn't measuring yet sits dimmed until it gets a figure.
+    // dim the dial until it has a figure
     readonly property bool engaged: live || value > 0
 
     property real shown: 0
-    // The digital readout stays on the real figure while the ignition sweep
-    // drives the needle -- a cluster sweeps its gauges, not its numerals.
+    // readout stays real while the needle sweeps
     readonly property real reading: ignition.running ? value : shown
     property real fullScale: 100
     readonly property var scaleStops: [100, 250, 500, 1000, 2500, 5000, 10000]
@@ -205,7 +190,7 @@ PanelWindow {
       NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
     }
 
-    // Live readings land once a second; glide between them rather than snap.
+    // glide between live readings
     Behavior on shown {
       enabled: !ignition.running
       NumberAnimation { duration: 600; easing.type: Easing.OutCubic }
@@ -216,16 +201,13 @@ PanelWindow {
       NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
     }
 
-    // A fresh measurement re-ranges from the base scale. Without this, one
-    // unusually fast run would compress every later one for the lifetime of
-    // the shell process.
+    // re-range from the base scale on a fresh run
     onLiveChanged: {
       if (live) fullScale = scaleStops[0]
     }
 
     onValueChanged: {
-      // Latch the scale upward to the next stop when a reading approaches the
-      // rim. Never shrink mid-run; a fresh run just re-sweeps from zero.
+      // latch the scale upward near the rim, never shrink mid-run
       for (var i = 0; i < scaleStops.length; i++) {
         if (value <= scaleStops[i] * 0.92) {
           if (scaleStops[i] > fullScale) fullScale = scaleStops[i]
@@ -240,8 +222,7 @@ PanelWindow {
       ignition.restart()
     }
 
-    // Car-cluster power-on: needle sweeps to full scale and falls back before
-    // the live figures take over.
+    // power-on sweep before the live figures
     SequentialAnimation {
       id: ignition
       NumberAnimation { target: dial; property: "shown"; to: dial.fullScale; duration: 550; easing.type: Easing.InOutCubic }
@@ -253,7 +234,7 @@ PanelWindow {
       anchors.fill: parent
       preferredRendererType: Shape.CurveRenderer
 
-      // Track: the full scale, always visible, dim.
+      // track: the full scale, always visible, dim
       ShapePath {
         strokeWidth: dial.arcWidth
         strokeColor: dial.trackColor
@@ -270,9 +251,7 @@ PanelWindow {
         }
       }
 
-      // Soft under-glow beneath the value arc, standing in for the backlit
-      // ring of a real cluster. Both arcs go transparent at rest, or their
-      // round caps would leave a stray dot at the foot of the scale.
+      // soft under-glow beneath the value arc
       ShapePath {
         strokeWidth: dial.arcWidth * 3
         strokeColor: dial.arcVisible ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
@@ -289,7 +268,7 @@ PanelWindow {
         }
       }
 
-      // Value: fills behind the needle.
+      // value: fills behind the needle
       ShapePath {
         strokeWidth: dial.arcWidth
         strokeColor: dial.arcVisible ? Color.accent : "transparent"
@@ -307,7 +286,7 @@ PanelWindow {
       }
     }
 
-    // Faint tick ring just inside the arc; every fifth tick is a major.
+    // faint tick ring, every fifth is major
     Repeater {
       model: dial.tickCount
 
@@ -329,8 +308,7 @@ PanelWindow {
       }
     }
 
-    // Hubless needle: a slender sliver that fades out toward the pivot, so
-    // it reads as floating like the rest of the cluster.
+    // hubless needle that fades toward the pivot
     Item {
       anchors.fill: parent
       rotation: dial.dialStart + dial.fraction * dial.dialSweep - 270
@@ -374,8 +352,7 @@ PanelWindow {
       }
     }
 
-    // The 90° gap at the bottom of the scale is where a cluster prints its
-    // unit; here it names the direction.
+    // gap at the bottom names the direction
     Text {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom

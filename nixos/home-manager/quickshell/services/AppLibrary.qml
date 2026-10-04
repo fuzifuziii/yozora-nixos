@@ -5,9 +5,7 @@ import Quickshell.Wayland
 import qs.Commons
 import "AppSearch.js" as AppSearch
 
-// Shared desktop-application library: the sorted entry list with hidden-entry
-// filtering, the icon fallback index, launch feedback, and entry removal.
-// Injected as shell.appLibrary; the menu's Apps submenu is the consumer.
+// shared desktop application library, injected as shell.appLibrary
 Item {
   id: root
 
@@ -16,24 +14,18 @@ Item {
   property var configuredHiddenEntryIds: ({})
   property var desktopHiddenEntryIds: ({})
 
-  // Maps an icon name to a file on disk (e.g. "omacut" -> ".../apps/omacut.svg").
-  // Used as a fallback for icons that Qt's themed lookup misses because they were
-  // installed after this process started (its icon cache never re-scans). Refreshed
-  // whenever the app list changes, so newly installed apps get their icon live.
+  // icon name to file map, fallback for icons added after startup
   property var iconIndex: ({})
   property var pendingIconIndex: ({})
 
   property int launchSerial: 0
   property int launchToplevelCount: 0
   property var launchActiveToplevel: null
-  // True while the launch OSD is on screen. It outlives the launch that opened
-  // it: the OSD shows with duration 0, so only closeLaunchFeedback() takes it
-  // down.
+  // true while the launch OSD is on screen
   property bool launchOsdOpen: false
   property string launchOsdMessage: ""
 
-  // Emitted whenever the visible application set may have changed: desktop
-  // entries appeared or vanished, or the hidden-entry filters reloaded.
+  // emitted when the visible app set may have changed
   signal appsChanged()
 
   function entryName(entry) {
@@ -61,15 +53,13 @@ Item {
     if (value.charAt(0) === "/") return Util.fileUrl(value)
     var themed = Quickshell.iconPath(value, true)
     if (themed.length > 0) return themed
-    // The theme lookup is authoritative. Use the filesystem index only when
-    // Qt cannot resolve an icon installed after the theme cache was built.
+    // theme lookup first, filesystem index as fallback
     var found = root.iconIndex[value]
     if (found) return Util.fileUrl(found)
     return Quickshell.iconPath("application-x-executable", true)
   }
 
-  // The shell may start before first-install packages have finished placing
-  // their icons; consumers call this when they open so icons appear live.
+  // refresh icons on open, the shell may start before they land
   function refreshIcons() {
     if (!iconIndexScan.running) iconIndexScan.running = true
   }
@@ -78,9 +68,7 @@ Item {
     var id = String(desktopId || "")
     if (!id) return
     root.beginLaunchFeedback(name)
-    // Pass the file name with its extension: gtk-launch only appends ".desktop"
-    // when the argument doesn't already end with it, so ids that themselves end
-    // in ".desktop" (e.g. org.telegram.desktop) would otherwise never resolve.
+    // pass the file name with extension to gtk-launch
     Util.execDetached("gtk-launch " + Util.shellQuote(id + ".desktop"))
   }
 
@@ -119,10 +107,7 @@ Item {
   }
 
   function iconIndexScanCommand() {
-    // List app/device icons across the XDG icon dirs and /usr/share/pixmaps as
-    // "<path>" lines. Some desktop entries, such as Print Settings, use device
-    // icons like "printer" instead of app icons. SVGs are emitted before PNGs
-    // so the parser, which keeps the first hit per name, prefers scalable icons.
+    // list app and device icons across XDG dirs and pixmaps
     return [
       'dirs="$HOME/.icons $HOME/.local/share/icons";',
       'IFS=":"; for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do dirs="$dirs $d/icons"; done; unset IFS;',
@@ -199,13 +184,11 @@ Item {
     command: ["bash", "-lc", root.iconIndexScanCommand()]
     stdout: SplitParser { onRead: function(line) { root.indexIconLine(line) } }
     onStarted: root.pendingIconIndex = ({})
-    // Swapping the property re-evaluates every iconSource() binding, so
-    // newly found icons appear without rebuilding the list.
+    // swapping the property re-evaluates every iconSource
     onExited: root.iconIndex = root.pendingIconIndex
   }
 
-  // Coalesces bursts of app-list changes (a package install touches many
-  // entries) into a single rescan.
+  // coalesce app-list change bursts into one rescan
   Timer {
     id: iconIndexDebounce
     interval: 750

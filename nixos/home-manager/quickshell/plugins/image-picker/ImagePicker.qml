@@ -10,7 +10,7 @@ import "ImagePickerModel.js" as ImagePickerModel
 Item {
   id: root
 
-  // Injected by fuzi-shell; defaults to the session FUZI_PATH.
+  // injected by fuzi-shell, defaults to FUZI_PATH
   property string fuziPath: Quickshell.env("FUZI_PATH")
   property string sourceDir: ""
   property string stateHome: Quickshell.env("HOME") + "/.local/share"
@@ -31,9 +31,7 @@ Item {
   property string doneFile: ""
   property string filterText: ""
   property var doneFilesToRelease: []
-  // Bound to the central [image-picker] section in shell.toml via Color.qml.
-  // `dimColor` tints unselected slices and text outlines on top of the scrim;
-  // it intentionally tracks the foundational background, not a surface role.
+  // bound to [image-picker] in shell.toml
   property color dimColor: Color.background
   property color foreground: Color.imagePicker.text
   property color scrim: Color.imagePicker.scrim
@@ -301,10 +299,7 @@ Item {
     }
   }
 
-  // Lifecycle hooks invoked by fuzi-shell summon/hide. shell.summon(id,
-  // payloadJson) hands the JSON to open() here; shell.hide(id) calls close().
-  // The shell host owns the stable `image-selector` IPC target and forwards
-  // those lower-level positional calls here.
+  // lifecycle hooks called by shell summon/hide
   function open(payload) {
     var args = {}
     if (payload) {
@@ -325,10 +320,7 @@ Item {
   }
 
   function preloadRows(nextImageRows, nextSelectedImage, nextShowLabels, nextFilterable) {
-    // Theme/background set hooks can warm selector rows after a picker was
-    // dismissed. Ignore those preloads while a user-visible request is open;
-    // otherwise the preload resets layoutSettled without revealing again,
-    // leaving only the fullscreen scrim.
+    // ignore preloads while a request is open
     if (opened || requestActive) return
 
     requestSerial += 1
@@ -503,9 +495,7 @@ Item {
                 Image {
                   id: image
                   anchors.fill: parent
-                  // Load only the initial/visited nearby images, but keep the
-                  // source once activated so Qt does not tear textures down as
-                  // selection moves through the carousel.
+                  // keep the source once loaded so textures stay
                   source: item.sourceActivated && item.thumbnailPath ? Util.fileUrl(item.thumbnailPath) : ""
                   fillMode: Image.PreserveAspectCrop
                   asynchronous: false

@@ -2,21 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 
-// The button. One component for every clickable thing in the kit.
-// States compose independently and are applied in priority order:
-//
-//   pressed (mouse down)         pressed fill
-//   activeFocus (Tab focus)      focus fill + focus border token
-//   hasCursor || hover           hover-cursor fill (+ border if `bordered`)
-//   selected                     selected fill + optional selected border
-//   active                       selected fill
-//   idle                         transparent or normal border if `bordered`
-//
-// All fills/borders come from `qs.Commons.Style` tokens, so themes
-// control the look via [controls] in shell.toml.
-//
-// Emits `hovered(bool)` so panels with their own keyboard cursor model
-// can update state on mouse enter/leave.
+// the clickable button, states applied by priority
 BorderSurface {
   id: root
 
@@ -24,19 +10,19 @@ BorderSurface {
   property string iconText: ""
   property string tooltipText: ""
 
-  // State flags (see comment above for paint priority).
+  // state flags (see comment above for paint priority)
   property bool selected: false
   property bool active: false
   property bool hasCursor: false
   property bool focusable: false
   property bool bordered: false
 
-  // Colors. Defaults track the theme; per-instance overrides are honored.
+  // colors follow the theme, per-instance overrides win
   property color foreground: Color.foreground
   property color background: "transparent"
   property color accent: Color.accent
 
-  // Sizing.
+  // sizing
   property string fontFamily: Style.font.family
   property real fontSize: Style.font.body
   property real iconSize: Style.font.icon
@@ -51,9 +37,7 @@ BorderSurface {
   topPadding: verticalPadding
   bottomPadding: verticalPadding
 
-  // Tooltip palette. Auto-rendered if tooltipText is set. Defaults pull
-  // from [tooltip] in shell.toml; override per-instance only when a button
-  // intentionally wants a tooltip that diverges from the theme.
+  // tooltip palette from [tooltip] in shell.toml
   property color tooltipBackground: Color.tooltip.background
   property color tooltipForeground: Color.tooltip.text
   property color tooltipBorder: Color.tooltip.border
@@ -67,9 +51,7 @@ BorderSurface {
   Keys.onEnterPressed: if (focusable) root.clicked()
   Keys.onSpacePressed: if (focusable) root.clicked()
 
-  // Reserve the largest border any visual state can paint. Otherwise a
-  // borderless idle button grows by a pixel per side on hover/focus and
-  // relayouts neighboring controls.
+  // reserve the largest border so hover does not relayout
   implicitWidth: row.implicitWidth + horizontalPadding * 2 + _reservedBorderLeft + _reservedBorderRight
   implicitHeight: row.implicitHeight + verticalPadding * 2 + _reservedBorderTop + _reservedBorderBottom
   radius: Style.cornerRadius
@@ -116,13 +98,7 @@ BorderSurface {
     : active               ? Style.selectedFillFor(root.foreground, root.accent)
     : background
 
-  // Border follows the same state precedence as fill. Buttons stay
-  // borderless at rest unless `bordered` is set, but hover-cursor/focus
-  // always use the shared cursor border so the keyboard target is visible
-  // and consistent with the rest of the kit. Selected borders are off by
-  // default for plain buttons; explicitly bordered buttons keep their
-  // normal border when selected unless selected-border-width opts in to a
-  // dedicated selected border.
+  // border follows the same state precedence as fill
   borderSpec: _borderSpec
 
   Behavior on color { ColorAnimation { duration: 120 } }

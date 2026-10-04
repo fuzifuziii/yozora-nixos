@@ -3,24 +3,21 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 
-// Instance, not a singleton — see BarWidgetRegistry for rationale.
+// instance, not a singleton, see BarWidgetRegistry
 QtObject {
   id: registry
 
   property string home: Quickshell.env("HOME")
   property string pluginsDir: home + "/.config/quickshell/plugins"
 
-  // Set by shell.qml at startup so we can also scan bundled first-party plugins.
+  // set by shell.qml to scan bundled plugins
   property string firstPartyDir: ""
 
-  // Wired by shell.qml so the registry can read the canonical shell.json
-  // without owning file IO itself. shellConfigProvider returns the current
-  // effective shell config; shellConfigMutator takes a function that receives
-  // a deep-cloned config it can mutate in place and persists the result.
+  // wired by shell.qml, registry reads shell.json without file IO
   property var shellConfigProvider: null
   property var shellConfigMutator: null
 
-  // { pluginId: manifest } — manifests have __sourceDir and __isFirstParty stamped in.
+  // pluginId -> manifest with source dir and first-party stamps
   property var installedPlugins: ({})
   property int registryRevision: 0
   property bool scanning: false
@@ -77,9 +74,7 @@ QtObject {
         return null
       }
     }
-    // Every entry point must be a relative path inside the plugin's source
-    // directory. Reject the whole manifest if anything looks like an attempt
-    // to escape the plugin's sandbox.
+    // entry points must stay inside the plugin dir
     for (var key in manifest.entryPoints) {
       if (!isSafeEntryPoint(manifest.entryPoints[key])) {
         console.warn("PluginRegistry: unsafe entryPoint '" + key + "'='"
@@ -96,8 +91,7 @@ QtObject {
     if (!ep) return ""
     var dir = manifest.__sourceDir || ""
     if (!dir) return ""
-    // Defense in depth: even after validateManifest, confirm the resolved
-    // path stays inside the plugin's sourceDir.
+    // confirm the resolved path stays in sourceDir
     var resolved = dir.replace(/\/$/, "") + "/" + String(ep)
     var expectedPrefix = dir.replace(/\/$/, "") + "/"
     if (resolved.indexOf(expectedPrefix) !== 0) {
@@ -107,19 +101,7 @@ QtObject {
     return Util.fileUrl(resolved)
   }
 
-  // Enabled = the plugin id is referenced somewhere in shell.json. That can
-  // be either the active bar option in `bar.id`, a layout entry inside
-  // `bar.layout.*` (bar widgets), or a top-level entry in `plugins[]` (panels,
-  // overlays, services).
-  //
-  // Special cases (implicitly always enabled, no shell.json entry needed):
-  //   - the built-in bar option (`fuzi.bar`) is active when `bar.id` is
-  //     missing or set to `fuzi.bar`.
-  //   - first-party non-bar plugins are shell infrastructure (settings,
-  //     image-picker, ...). Requiring users to add them to plugins[] just to
-  //     summon them was a footgun: a stock shell.json with `plugins: []` would
-  //     silently make `fuzi launch bar-settings` a no-op. Turning one off
-  //     is therefore recorded the other way round, in `disabledPlugins[]`.
+  // enabled means the id is referenced in shell.json
   function isEnabled(id) {
     var key = String(id)
     var manifest = installedPlugins[key]
@@ -145,8 +127,7 @@ QtObject {
 
   function resolveEnabledId(id) {
     var key = Util.canonicalWidgetId(String(id || ""))
-    // Callers keep using the built-in id after cloning; the enabled local
-    // manifest is the implementation that should receive the call.
+    // calls to a built-in id go to the enabled local clone
     for (var candidate in installedPlugins) {
       var manifest = installedPlugins[candidate]
       var metadata = manifest && Util.isPlainObject(manifest.fuzi) ? manifest.fuzi : null
@@ -156,11 +137,7 @@ QtObject {
     return key
   }
 
-  // A bar widget is on when it sits in the bar, whoever shipped it. That is a
-  // different question from isEnabled(), which decides whether the widget's
-  // component is loaded at all — a built-in stays loadable so it can be put
-  // back, and so a plugin that is both a widget and a menu (fuzi.menu)
-  // cannot be locked out of the shell by taking its button off the bar.
+  // a bar widget is on when it sits in the bar
   function inBar(id) {
     var config = shellConfigProvider ? shellConfigProvider() : null
     return findEntryLocation(config, id).kind === "bar"
@@ -336,11 +313,7 @@ QtObject {
     if (!Array.isArray(config.plugins)) config.plugins = []
   }
 
-  // Bar widgets use the default section declared in their manifest, falling
-  // back to center. Panels/overlays/menus/services go into the plugins[] array.
-  // Built-ins are already loaded, so shell.json only ever records the
-  // deviation: an added third-party plugin in plugins[], a switched-off
-  // built-in in disabledPlugins[].
+  // widgets use the manifest default section, shell.json records deviations
   function removeDisabled(config, id) {
     if (!Array.isArray(config.disabledPlugins)) return
     config.disabledPlugins = config.disabledPlugins.filter(function(entry) { return entry !== id })
@@ -498,8 +471,7 @@ QtObject {
       else if (location.kind === "bar") config.bar.layout[location.section].splice(location.index, 1)
       else if (location.kind === "plugin") config.plugins.splice(location.index, 1)
 
-      // Dropping the layout entry is the whole story for a widget. Anything
-      // else built-in loads by default, so switching it off has to be stated.
+      // dropping the layout entry is enough for a widget
       if (isFirstParty && !isBarWidget) addDisabled(config, key)
     })
     if (lastEnableError) return false
@@ -510,11 +482,7 @@ QtObject {
 
   // ---------------------------------------------------------------- scanning
 
-  // Output format produced by the rescan script:
-  //   ===<kind>::<absolute-source-dir>===
-  //   ... raw manifest.json content ...
-  //   === EOM ===
-  // (repeating for every manifest found)
+  // rescan script output format
   function parseScanOutput(text) {
     var lines = String(text || "").split("\n")
     var firstParty = {}
@@ -563,13 +531,9 @@ QtObject {
 
     var merged = {}
     for (var fk in firstParty) merged[fk] = firstParty[fk]
-    // Third-party plugins never shadow first-party ids. The whole
-    // `fuzi.*` namespace is reserved for built-ins, including bar widgets
-    // registered outside the manifest-based plugin registry.
+    // third-party plugins never shadow fuzi.* ids
     for (var tk in thirdParty) {
-      // When the bundled first-party tree is itself the active shell config,
-      // both scans see the exact same manifest. It is not a user plugin trying
-      // to shadow a reserved id, so merge it silently.
+      // merge the bundled first-party tree silently
       if (firstParty[tk] && firstParty[tk].__sourceDir === thirdParty[tk].__sourceDir) continue
       if (firstParty[tk] || String(tk).indexOf("fuzi.") === 0) {
         console.warn("PluginRegistry: plugin " + tk
@@ -633,13 +597,7 @@ QtObject {
   function rescan() {
     if (scanning) return
     scanning = true
-    // $0 = first-party dir, $1 = third-party dir. Some bash versions need the explicit -- separator.
-    // First-party plugins may be grouped one level deeper, e.g. panels/audio
-    // or services/battery.
-    // First-party bar widgets can also carry sibling manifests such as
-    // widgets/Clock.manifest.json so multiple widgets can live in one source
-    // directory without wrapper folders.
-    // Third-party plugins stay at the top level of ~/.config/quickshell/plugins.
+    // $0 first-party dir, $1 third-party dir
     var script = ""
       + "emit_manifest() { local kind=\"$1\"; local manifest=\"$2\"; local sub; "
       + "  if [[ ${manifest##*/} == \"manifest.json\" ]]; then sub=\"${manifest%/manifest.json}\"; else sub=\"$(dirname -- \"$manifest\")\"; fi; "
@@ -675,7 +633,7 @@ QtObject {
     if (path.indexOf(base) !== 0) return ""
 
     var relative = path.slice(base.length)
-    // Hidden entries are not plugins: clone staging dirs, remove backups.
+    // skip hidden entries, they are staging dirs and backups
     if (relative.indexOf(".") === 0) return ""
     if (relative.indexOf("/.git/") !== -1 || relative.endsWith("/.git")) return ""
 

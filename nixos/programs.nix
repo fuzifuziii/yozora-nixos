@@ -1,10 +1,4 @@
 { config, lib, pkgs, pkgs-stable, inputs, ... }:
-let
-  modAsar = pkgs.fetchurl {
-    url = "https://github.com/PulseSync-LLC/PulseSync-mod/releases/latest/download/app.asar";
-    sha256 = "sha256-AEaHRHSVGjvMu1k39hEwfN+TsrqspGKFhUCUQtyzDvk=";
-  };
-in
 {
   # Packages
   environment.systemPackages = with pkgs; [
@@ -25,12 +19,13 @@ in
     })
     qbittorrent
     chromium
+    inputs.cordial.packages.${pkgs.system}.default
+
     (yandex-music.overrideAttrs (old: {
       postInstall = (old.postInstall or "") + ''
-      cp ${modAsar} $out/share/nodejs/yandex-music.asar
+      cp ${inputs.pulsesync-mod} $out/share/nodejs/yandex-music.asar
       '';
     }))
-    inputs.cordial.packages.${pkgs.system}.default
 
     # Archive
     kdePackages.ark

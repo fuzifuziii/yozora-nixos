@@ -9,13 +9,12 @@ import "MenuModel.js" as MenuModel
 Item {
   id: root
 
-  // Injected by fuzi-shell when this plugin is summoned.
+  // injected by fuzi-shell when this plugin is summoned
   property string fuziPath: Quickshell.env("FUZI_PATH")
   property var shell: null
   property var manifest: null
 
-  // Plugin lifecycle hooks. The host calls open(payloadJson) after
-  // `fuzi-shell shell summon fuzi.menu ...` and close() when hidden.
+  // lifecycle hooks called by the host
   property string pendingInitialMenu: "root"
 
   function open(payloadJson) {
@@ -44,9 +43,7 @@ Item {
   function ping() { return "ok" }
 
   property string fontFamily: Style.font.menuFamily
-  // JSONC menu definitions. The shell parses both at startup and merges
-  // the user file on top of the defaults, so the keybind → IPC → visible
-  // path doesn't have to shell out to bash + jq on every open.
+  // JSONC menu definitions, user file merged over defaults
   property string defaultMenuPath: Quickshell.env("HOME") + "/.config/quickshell/fuzi-menu.jsonc"
   property string userMenuPath: Quickshell.env("HOME") + "/.config/quickshell/extensions/fuzi-menu.jsonc"
   property var defaultMenuItems: []
@@ -75,16 +72,13 @@ Item {
   property var providerQueue: []
   property int providerRevision: 0
 
-  // Shared application engine (entries, hidden filters, icons, launch,
-  // removal), owned by the shell and also used by the standalone launcher.
+  // shared application engine, also used by the launcher
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
   property bool showAppIcons: true
   property bool deleteConfirmOpen: false
   property var deleteTarget: null
   onOpenedChanged: if (!opened) { deleteConfirmOpen = false; deleteTarget = null }
-  // Bound to the central [menu] section in shell.toml via Color.qml.
-  // Each color already includes its alpha companion (composed in the
-  // singleton), so consumers can drop them straight into a Rectangle.
+  // bound to [menu] in shell.toml, colors include alpha
   property color background: Color.menu.background
   property color foreground: Color.menu.text
   property color border: Color.menu.border
@@ -102,8 +96,7 @@ Item {
   property int contentSpacing: Style.spacing.md
   property int baseRowHeight: Math.max(Style.space(50), Style.font.body + Style.spacing.rowPaddingX * 2)
   property int detailRowHeight: Math.max(Style.space(58), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
-  // How much of the first hidden row stays visible at the fold — enough to
-  // read as a cut-off row rather than a bottom border.
+  // visible part of the first hidden row at the fold
   property int rowPeek: Math.round(baseRowHeight * 0.55)
   property int rowSpacing: Style.spacing.xs
   property int dividerHeight: Style.space(17)
@@ -146,20 +139,15 @@ Item {
     return root.filterText && detail ? root.detailRowHeight : root.baseRowHeight
   }
 
-  // Height the card can devote to rows before running off the screen — or
-  // past the frozen top edge once a search has pinned the card in place.
-  // Uses panel.cardTop rather than effectiveCardTop: the centered top is
-  // derived from the card height, which this value feeds.
+  // height available for rows before the screen edge
   function availableRowsHeight() {
     var top = panel.cardTop >= 0 ? panel.cardTop : Style.gapsOut
     var available = panel.height - top - Style.gapsOut - root.contentMargin * 2 - root.headerHeight - root.contentSpacing
-    // A card that swallows the whole screen reads as a page, not a menu.
+    // a full-screen card reads as a page
     return Math.min(available, Math.round(panel.height * 0.6))
   }
 
-  // When every row fits, the list gets its full height. When they don't,
-  // the card must end mid-row: a clipped row is what tells the eye there is
-  // more below the fold, so never come out even on a row boundary.
+  // end the card mid-row so the fold shows
   function foldedListHeight(totals, available) {
     var count = totals.length
     if (count === 0) return root.baseRowHeight
@@ -215,10 +203,7 @@ Item {
     return root.items[id] || null
   }
 
-  // ------------------------------------------------------------------
-  // JSONC → normalized item array. Mirrors the bash bin's jq pipeline so
-  // the on-disk authoring format stays untouched.
-  // ------------------------------------------------------------------
+  // ---- JSONC to normalized item array
 
   function stripJsonc(raw) {
     return MenuModel.stripJsonc(raw)
@@ -236,9 +221,7 @@ Item {
     return MenuModel.parseMenuJsonc(raw)
   }
 
-  // Merge defaults + user extension. Later entries override earlier ones
-  // on a per-key basis (so the user can tweak label/icon/action without
-  // re-declaring the whole row).
+  // merge defaults and user extension per key
   function rebuildItemsFromSources() {
     var mergedMenu = MenuModel.mergeMenuSources(root.defaultMenuItems, root.userMenuItems)
     root.providerRevision += 1
@@ -257,11 +240,7 @@ Item {
     }
   }
 
-  // Each known provider is a tiny bash one-liner that enumerates a list and
-  // emits one tab-delimited row per item: `label\tvalue\tcurrent`. The shell
-  // turns those into menu items children of `menuId`. A `volatile` provider
-  // re-runs every time its submenu is entered, so a font installed since the
-  // shell started shows up without restarting it.
+  // providers emit tab-delimited rows as menu items
   readonly property var providers: ({
     "fonts": {
       script: "current=$(fuzi-font-current 2>/dev/null); fuzi-font-list 2>/dev/null | while read -r f; do [[ -z $f ]] && continue; printf '%s\\t%s\\t%s\\n' \"$f\" \"$f\" \"$current\"; done",
@@ -280,9 +259,7 @@ Item {
     return MenuModel.slugify(value)
   }
 
-  // The apps provider is QML-native: rows come from the shared AppLibrary
-  // (DesktopEntries) instead of a bash enumeration, so they carry image
-  // icons, launch feedback, and uninstall support like the launcher.
+  // apps provider is QML-native via AppLibrary
   function mergeAppRows() {
     if (!root.appLibrary) return
 
@@ -357,9 +334,7 @@ Item {
       var value = parts[1] || parts[0] || ""
       var current = parts[2] || ""
       if (!label) continue
-      // Distinct values can slugify alike — Fira Code and Fira-Code both give
-      // fira-code — and a repeated id is dropped, which would silently lose a
-      // row from the list. Nudge it until it is the row's own.
+      // nudge duplicate slugified ids so no row is lost
       var rowId = menuId + "." + root.slugify(value)
       while (takenIds[rowId]) rowId += "-"
       takenIds[rowId] = true
@@ -400,9 +375,7 @@ Item {
     }
   }
 
-  // Entering a submenu is the one moment a volatile list is worth paying for
-  // again: it may have been reshaped by the last pick from it. Search doesn't
-  // invalidate, or every keystroke would restart the same enumeration.
+  // refresh volatile lists on submenu entry only
   function invalidateVolatileProvider(id) {
     var entry = root.item(id)
     var spec = entry && entry.provider ? root.providers[entry.provider] : null
@@ -413,7 +386,7 @@ Item {
     var entry = root.item(id)
     if (!entry || !entry.provider || root.providersLoaded[id]) return
 
-    // Native providers don't touch providerProc, so they never need to queue.
+    // native providers never queue
     if (entry.provider === "apps") {
       root.startProviderForMenu(id)
       return
@@ -459,14 +432,12 @@ Item {
     return MenuModel.childCount(root.items, root.itemOrder, id)
   }
 
-  // Guarded items are hidden when their `when:` evaluates false. Static
-  // submenus are also hidden when none of their descendants are visible;
-  // provider-backed menus stay visible because their rows load on demand.
+  // hide guarded items when `when:` is false
   function isVisible(entry) {
     return MenuModel.isVisible(root.items, root.itemOrder, root.whenResults, entry)
   }
 
-  // Label with the ✓ marker baked in when `checked:` evaluated truthy.
+  // label with the check marker when `checked:` is truthy
   function labelFor(entry) {
     return MenuModel.labelFor(entry, root.checkedResults)
   }
@@ -514,9 +485,7 @@ Item {
 
     var query = root.filterText.trim().toLowerCase()
     for (var i = 0; i < root.dmenuOptions.length; i++) {
-      // An option may lead with an icon, as "<glyph>\t<label>". Only the label
-      // is filtered against and handed back, so the caller never sees a glyph
-      // it has to strip off the selection.
+      // option may lead with an icon glyph
       var parts = String(root.dmenuOptions[i] || "").split("\t")
       var icon = parts.length > 1 ? parts.shift() : ""
       var label = parts.join("\t")
@@ -603,8 +572,7 @@ Item {
         rows.push(root.displayRow(child, child.description, child.order))
       }
 
-      // DesktopEntries can reorder its values when an application starts.
-      // Keep the Apps menu alphabetical independently of provider refreshes.
+      // keep the Apps menu alphabetical
       if (active === "apps") {
         rows.sort(function(a, b) {
           var aLabel = String(a.label || "").toLowerCase()
@@ -632,9 +600,7 @@ Item {
     })
   }
 
-  // Contain alone parks the cursor row flush with the viewport edge, hiding
-  // the neighbor entirely and losing the fold affordance. Keep the next
-  // hidden row peeking past the cursor in the direction of travel.
+  // peek the next hidden row past the cursor
   function revealCursor() {
     if (displayModel.count === 0) return
     resultList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
@@ -801,8 +767,7 @@ Item {
     rebuildDisplay()
     invalidateVolatileProvider(activeMenu)
     loadProviderForMenu(activeMenu)
-    // The shell may start before first-install packages have finished placing
-    // their icons. Refresh here even when the desktop entry list did not change.
+    // refresh icons even if the entry list did not change
     if (root.appLibrary) root.appLibrary.refreshIcons()
 
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
@@ -831,13 +796,7 @@ Item {
   }
   ListModel { id: displayModel }
 
-  // ----------------------------------------------------------- route surface
-  //
-  // The menu is opened through the standard plugin lifecycle:
-  // `fuzi-shell shell summon fuzi.menu '{"menu":"system"}'`.
-  // Callers may pass a real id (`system`, `setup.power`) or an alias declared
-  // in JSONC (`power`, `reminder-set`). Unknown strings fall through to the
-  // id-as-route behavior so misspellings still attempt to open the literal id.
+  // ---- route surface
   function resolveRoute(input) {
     var raw = String(input || "").toLowerCase().replace(/_/g, "-")
     if (!raw || raw === "go" || raw === "menu") return "root"
@@ -855,15 +814,13 @@ Item {
   function openRoute(initialMenu) {
     var id = root.resolveRoute(initialMenu)
     var entry = root.items[id]
-    // If the resolved id is an action (i.e. the user invoked an alias for
-    // a leaf, e.g. `fuzi menu summon screenrecord-stop`), run it directly
-    // instead of opening an action with no children.
+    // run an alias for a leaf action directly
     if (entry && entry.kind === "action" && entry.action) {
       root.cancel()
       root.runAction(entry.action)
       return "ok"
     }
-    // If it's a link (a redirect to another menu), follow the link.
+    // follow links to another menu
     if (entry && entry.kind === "link" && entry.target) id = entry.target
     root.pendingInitialMenu = id
     root.openExistingMenu(id)
@@ -918,9 +875,7 @@ Item {
     }
   }
 
-  // The JSONC sources are watched so live edits to the default file (or the
-  // user extension at ~/.config/quickshell/extensions/fuzi-menu.jsonc) take
-  // effect without restarting the shell.
+  // watch the JSONC sources for live edits
   FileView {
     id: defaultMenuFile
     path: root.defaultMenuPath
@@ -940,12 +895,7 @@ Item {
     onFileChanged: reload()
   }
 
-  // ---------------------------------------------------------------- guards
-  //
-  // `when:` (visibility) and `checked:` (✓ marker) are bash expressions the
-  // shell wasn't allowed to evaluate before the perf rewrite. Now the shell
-  // batches them into one bash subprocess per (re)load so the open path
-  // never has to wait on them.
+  // ---- guards
 
   property var whenResults: ({})       // id → true|false (allow visibility)
   property var checkedResults: ({})    // id → true|false (show ✓)
@@ -1008,10 +958,7 @@ Item {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
 
-    // The card opens centered exactly as always. The first search keystroke
-    // or submenu move freezes the top line where it currently sits — from
-    // then on the card grows and shrinks downward instead of re-centering
-    // on every resize, which made the menu jump around. Closing unfreezes.
+    // freeze the card top on first search or submenu move
     property int cardTop: -1
     readonly property int centeredTop: Math.max(Style.gapsOut, Math.round((height - root.cardHeight) / 2))
     readonly property int effectiveCardTop: cardTop >= 0 ? cardTop : centeredTop
@@ -1231,8 +1178,7 @@ Item {
                 width: Style.font.iconLarge
                 height: Style.font.iconLarge
                 fillMode: Image.PreserveAspectFit
-                // Decode at physical pixels — a logical-size decode leaves
-                // PNG icons upscaled and blurry on HiDPI displays.
+                // decode at physical pixels for HiDPI
                 sourceSize.width: width * Screen.devicePixelRatio
                 sourceSize.height: height * Screen.devicePixelRatio
                 source: row.isApp && root.appLibrary ? root.appLibrary.iconSource(row.appIcon) : ""
@@ -1324,12 +1270,7 @@ Item {
             }
           }
 
-          // Scroll scrims. The clipped row already marks the fold at rest;
-          // these keep both edges honest once the list has been scrolled,
-          // when content hides above the card top as well as below. Strength
-          // tracks the distance still hidden past each edge rather than
-          // animating on a clock, so a programmatic jump — wrapping from the
-          // last row back to the first — lands with the fade already applied.
+          // scroll scrims for hidden content above and below
           Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right

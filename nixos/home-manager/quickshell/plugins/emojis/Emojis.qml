@@ -21,9 +21,7 @@ Item {
   property var filteredEmojis: []
   readonly property string emojiDataPath: String(Qt.resolvedUrl("emojis.json")).replace(/^file:\/\//, "")
 
-  // Shares the [menu] surface tokens — themes that style the menu also
-  // style emojis. Selected-cell colors composed in the
-  // singleton so consumers drop them straight into Rectangle bindings.
+  // shares the [menu] surface tokens
   property color background: Color.menu.background
   property color foreground: Color.menu.text
   property color border: Color.menu.border

@@ -4,19 +4,13 @@ import Quickshell
 import Quickshell.Io
 import "BorderGeometry.js" as Geometry
 
-// Color surfaces for the shell. Foundational palette (foreground, background,
-// accent, urgent) comes from theme/colors.toml. Per-surface roles come from
-// theme/shell.toml — generated per theme from default/themed/shell.toml.tpl,
-// or shipped directly by a theme to replace the generated file. Surfaces that
-// don't appear in shell.toml fall back to the foundational palette.
+// shell colors from colors.toml and shell.toml
 QtObject {
   id: root
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: home + "/.local/state"
-  // Prefer a live theme link when present; otherwise use ~/.config/quickshell
-  // so a pure Waybar migration does not need ~/.local/state/fuzi/current/theme.
-  // Colors/shell.toml live next to shell.json — no theme directory required.
+  // prefer the live theme link, else ~/.config/quickshell
   readonly property string currentThemePath: home + "/.config/quickshell"
 
   property color foreground: "#ffffff"
@@ -25,9 +19,7 @@ QtObject {
   property color urgent: "#f38ba8"
   property color muted: "#a6adc8"
 
-  // Flat dictionary of "section.key" -> raw string from shell.toml.
-  // Reassigning this whole property is what makes surface bindings below
-  // re-evaluate when the theme swaps; mutating it in place would not.
+  // flat "section.key" dict, reassign to re-evaluate bindings
   property var shellValues: ({})
 
   function pick(key, fallback) {
@@ -67,8 +59,7 @@ QtObject {
     return color
   }
 
-  // Compose a color from a base-color key and its `-alpha` companion. If the
-  // base token is a gradient, color-only consumers use the first stop.
+  // compose a color from a key and its -alpha companion
   function composed(colorKey, alphaKey, colorFallback, alphaFallback) {
     return Util.alpha(flatColor(pick(colorKey, colorFallback), colorFallback), pickAlpha(alphaKey, alphaFallback))
   }
@@ -103,9 +94,7 @@ QtObject {
     property color selectedText: root.flatColor(root.pick("menu.selected-text", "accent"), root.accent)
     property color selectedBorder: root.composed("menu.selected-border", "menu.selected-border-alpha", root.foreground, 0.0)
   }
-  // polkit + lock share a single border-alpha across border / border-active /
-  // border-error: the three states are mutually exclusive in time, so one
-  // companion is enough.
+  // polkit and lock share one border-alpha
   readonly property QtObject polkit: QtObject {
     property color background: root.composed("polkit.background", "polkit.background-alpha", root.background, 1.0)
     property color text: root.flatColor(root.pick("polkit.text", "foreground"), root.foreground)
@@ -125,9 +114,7 @@ QtObject {
     property color borderError: root.composed("lock.border-error", "lock.border-alpha", root.urgent, 1.0)
     property color selection: root.composed("lock.selection", "lock.selection-alpha", root.accent, 0.45)
   }
-  // The image picker has no card surface; `scrim` is the full-screen dim
-  // wash, and per-slice dim overlays / text outlines use the foundational
-  // `background` color directly.
+  // image picker has no card, scrim is the dim wash
   readonly property QtObject imagePicker: QtObject {
     property color scrim: root.composed("image-picker.scrim", "image-picker.scrim-alpha", root.background, 0.5)
     property color text: root.flatColor(root.pick("image-picker.text", "foreground"), root.foreground)
@@ -150,9 +137,7 @@ QtObject {
       if (!match) continue
       if (match[1] === "foreground") { foreground = match[2]; loadedForeground = true }
       else if (match[1] === "background") { background = match[2]; loadedBackground = true }
-      // Prefer the explicit `accent` key; only fall back to color4 when the
-      // theme doesn't define a separate accent. color4 appears later in the
-      // file so the old single-property approach clobbered accent with it.
+      // prefer accent, fall back to color4
       else if (match[1] === "accent") { accent = match[2]; foundAccent = true }
       else if (match[1] === "muted") { muted = match[2]; foundMuted = true }
       else if (match[1] === "color0") color0Value = match[2]
@@ -167,17 +152,11 @@ QtObject {
     if (!foundMuted) muted = color8Value.length > 0 ? color8Value : foreground
   }
 
-  // Last theme-supplied and user-supplied shell.toml dicts, kept separate so
-  // either can be reloaded without re-reading the other. `shellValues` is
-  // always the merge of theme (base) and user (override) — see mergeShell.
+  // keep theme and user shell.toml dicts separate
   property var themeShellValues: ({})
   property var userShellValues: ({})
 
-  // Single TOML walker for shell.toml. Both Color (surface roles) and Style
-  // (typography, spacing, bar, control states) consume the resulting dict.
-  // Accepts quoted strings, bare numeric values, bare width lists, and bare
-  // role names; tolerates inline comments. Numbers are kept as strings here —
-  // readers coerce when they pull a value.
+  // single TOML walker for shell.toml
   function parseShell(raw) {
     var parsed = {}
     var text = String(raw || "")
@@ -201,9 +180,7 @@ QtObject {
     return parsed
   }
 
-  // Re-derive `shellValues` from theme base + user override and push it to
-  // Style. User keys win, so a machine-level `~/.config/quickshell/shell.toml`
-  // survives theme switches (which replace only themeShellValues).
+  // re-derive shellValues from theme and user override
   function mergeShell() {
     var merged = {}
     for (var tk in themeShellValues) merged[tk] = themeShellValues[tk]
@@ -222,8 +199,7 @@ QtObject {
     mergeShell()
   }
 
-  // Startup load only. Runtime theme switches push the payload explicitly
-  // through shell IPC.
+  // startup load only
   property FileView colorsFile: FileView {
     id: colorsFile
     path: root.currentThemePath + "/colors.toml"
@@ -239,18 +215,14 @@ QtObject {
     onLoaded: root.loadShell(text())
     onLoadFailed: root.loadShell("")
   }
-  // Machine-level override, layered on top of whatever theme is active. This
-  // is where `fuzi display text size` writes `[font] base-size`. Watched so the
-  // CLI takes effect live without restarting the shell; absent by default.
+  // machine-level shell.toml override, watched for changes
   property FileView userShellFile: FileView {
     id: userShellFile
     path: root.home + "/.config/quickshell/shell.toml"
     watchChanges: true
     printErrors: false
     onLoaded: root.loadUserShell(text())
-    // Re-read on change (including first creation) before loading — `text()`
-    // is stale in the change signal itself, so route both paths through reload
-    // → onLoaded to always parse fresh content.
+    // reload on change, text() is stale in the change signal
     onFileChanged: reload()
     onLoadFailed: root.loadUserShell("")
   }

@@ -123,7 +123,7 @@ BarWidget {
       anchors.fill: parent
       spacing: Style.space(12)
 
-       // Match the battery panel's compact hero and solid progress strip.
+       // match the battery panel's compact hero and progress strip
        Item {
          width: parent.width
          implicitHeight: Math.max(monitorIcon.implicitHeight, monitorLabels.implicitHeight, monitorPercent.implicitHeight)

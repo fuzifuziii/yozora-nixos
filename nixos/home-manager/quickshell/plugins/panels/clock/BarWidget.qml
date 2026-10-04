@@ -5,11 +5,7 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// Date/time label for the bar, and the host for the calendar popup.
-//
-// Left click reveals the calendar — asking "what is the date?" is what a
-// click on a clock means — right click walks the common label formats, and
-// middle click opens the timezone picker.
+// clock label and calendar popup host
 BarWidget {
   id: root
   moduleName: "fuzi.clock"
@@ -25,8 +21,7 @@ BarWidget {
 
   readonly property var formatRing: Model.clockFormatRing(configuredFormat, configuredAltFormat, Model.clockFormats(vertical))
 
-  // What the bar shows is what shell.json stores, so a cycled format is the
-  // format from then on rather than something that reverts on restart.
+  // cycled format is stored in shell.json
   readonly property string activeFormat: configuredFormat
   readonly property string displayText: formatted(displayDate)
   readonly property var verticalLines: displayText.split("\n")
@@ -45,8 +40,7 @@ BarWidget {
     for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
     entry[vertical ? "verticalFormat" : "format"] = next
 
-    // Applied locally first so the label changes on the click itself; the
-    // shell.json write comes back through the bar as the same value.
+    // apply locally first, shell.json write comes back
     root.settings = entry
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
       root.bar.shell.updateEntryInline(root.moduleName, entry)
@@ -56,9 +50,7 @@ BarWidget {
     return Qt.formatDateTime(date, activeFormat.replace(/ww/g, Model.isoWeekLiteral(date.getFullYear(), date.getMonth(), date.getDate())))
   }
 
-  // ---- Calendar popup. Shape contract for shell.summon/hide/toggle
-  //      routing: Bar.findPanelWidget requires open/close/opened on the
-  //      bar-widget root.
+  // ---- calendar popup
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
   function open() {
@@ -77,17 +69,11 @@ BarWidget {
     if (panelLoader.item) panelLoader.item.toggleWeekStart()
   }
 
-  // The clock fills more slot than it paints a mark for, at both
-  // orientations: horizontally it is a text label in a padded slot, so the
-  // dot takes the label width; vertically it is a stack of icon-sized lines,
-  // so the dot takes one line — the same mark every icon widget gets, rather
-  // than a rule running the height of the whole stack.
+  // dot takes the label width or one line
   readonly property real openPanelIndicatorWidth: button.labelWidth
   readonly property real openPanelIndicatorHeight: Math.max(Style.space(10), Math.round(Style.bar.iconSlot * 0.55))
 
-  // Forwarded so this widget can stand in for the panel as the bar's popout
-  // identity: Bar.requestPopout prefers closeForPopoutSwitch over close, and
-  // KeyboardPanel reads popoutSwitchClosing back off its owner.
+  // forwarded so the widget can stand in as popout identity
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
 
   function closeForPopoutSwitch() {

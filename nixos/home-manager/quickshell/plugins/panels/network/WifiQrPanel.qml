@@ -4,8 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 
-// Centered Wi-Fi share overlay, presented like the speed test: no card,
-// just the QR code floating on a heavy scrim. Esc or the scrim dismiss it.
+// centered Wi-Fi share overlay, QR on a scrim
 PanelWindow {
   id: root
 
@@ -28,9 +27,7 @@ PanelWindow {
   signal passwordToggleRequested()
 
   visible: open
-  // The window is instantiated hidden, so the content's `focus: true` is
-  // evaluated before the surface is mapped and Escape would land nowhere.
-  // Re-acquire after mapping, as KeyboardPanel does.
+  // re-acquire focus after mapping, as KeyboardPanel does
   onOpenChanged: {
     if (open) Qt.callLater(function() {
       if (root.open) keyCatcher.forceActiveFocus()
@@ -44,8 +41,7 @@ PanelWindow {
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
-  // Deep scrim: the floating code needs the backdrop to carry the contrast
-  // on any wallpaper.
+  // deep scrim carries the contrast
   Rectangle {
     anchors.fill: parent
     color: Qt.rgba(0, 0, 0, 0.78)
@@ -67,13 +63,12 @@ PanelWindow {
       anchors.centerIn: parent
       width: content.implicitWidth
       height: content.implicitHeight
-      // Narrow or heavily scaled outputs: shrink the whole card rather than
-      // clipping it at the screen edge.
+      // shrink the card on narrow or scaled outputs
       scale: Math.min(1,
         (keyCatcher.width - Style.space(32)) / Math.max(1, width),
         (keyCatcher.height - Style.space(32)) / Math.max(1, height))
 
-      // Swallow clicks so only the scrim outside the content dismisses.
+      // swallow clicks, only the outside scrim dismisses
       MouseArea { anchors.fill: parent; onClicked: {} }
 
       ColumnLayout {
@@ -94,11 +89,7 @@ PanelWindow {
           horizontalAlignment: Text.AlignHCenter
         }
 
-        // Render every QR module as an integer-sized native rectangle. This
-        // stays crisp and avoids temporary images and file-cache races. Only
-        // the dark modules paint, so the white canvas can keep its rounded
-        // corners; the spec quiet zone baked into the matrix keeps the code
-        // itself clear of them.
+        // draw QR modules as integer-sized native rectangles
         Rectangle {
           id: qrCanvas
           readonly property int moduleSize: root.qrSize > 0

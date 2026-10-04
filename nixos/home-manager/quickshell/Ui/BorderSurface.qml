@@ -1,9 +1,7 @@
 import QtQuick
 import qs.Commons
 
-// Rectangle-compatible surface with Fuzi border specs. Uses native
-// Rectangle.border for cheap flat/uniform borders and BorderOverlay for
-// gradients or per-side widths.
+// rectangle-compatible surface with border specs
 Rectangle {
   id: root
 

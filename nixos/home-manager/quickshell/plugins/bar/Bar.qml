@@ -9,24 +9,17 @@ import "BarModel.js" as BarModel
 Item {
   id: root
 
-  // The fuzi-shell host injects fuziPath from FUZI_PATH.
+  // the fuzi-shell host injects fuziPath from FUZI_PATH
   required property string fuziPath
-  // Injected by the host shell so bar slots can resolve enabled widgets.
+  // injected by the host so slots can resolve widgets
   required property var barWidgetRegistry
-  // Injected by the host shell every time shell.json is reloaded. Holds the
-  // `bar:` subtree: position, centerAnchor, layout. The host owns file IO;
-  // the bar just renders whatever it's handed. The bar font follows the
-  // OS-level fontconfig monospace binding — it is not stored in shell.json.
+  // bar config subtree, injected on every shell.json reload
   required property var barConfig
-  // Injected by the host shell. Used for shell-wide actions such as opening
-  // settings and persisting inline widget state.
+  // injected by the host for shell-wide actions
   property var shell: null
-  // Manifest for the active bar option. Present for custom bars and useful for
-  // diagnostics; the built-in bar does not otherwise need it.
+  // manifest of the active bar option
   property var manifest: null
-  // Mirrors the on-disk `bar-off` flag so the user can hide the bar without
-  // killing the entire shell. Wired to BarPanel.visible below; updated by the
-  // FileView watcher further down.
+  // mirrors the bar-off flag
   property bool barHidden: false
   property string home: Quickshell.env("HOME")
   property string stateHome: home + "/.local/state"
@@ -47,12 +40,9 @@ Item {
   property bool centerHoverRevealSuppressed: false
   property int barConfigSerial: 0
   property string position: "top"
-  // Resolves through fontconfig at paint time (Style.font.family defaults
-  // to "monospace"), so changing the system font (via `fuzi-font-set`)
-  // updates the bar without a reload.
+  // font resolves through fontconfig at paint time
   property string fontFamily: Style.font.family
-  // Bound to the central Color singleton so the bar tracks shell.toml's
-  // [bar] section. Property names kept for the rest of this file's bindings.
+  // bound to Color so the bar tracks shell.toml [bar]
   property color themeForeground: Color.bar.text
   property color themeContrastForeground: Color.background
   property color transparentForeground: Color.bar.text
@@ -166,8 +156,7 @@ Item {
     return BarModel.normalizePosition(value)
   }
 
-  // Apply tray-pinning on top of the shared layout normalization so the
-  // bar host and scriptable config helpers can't drift on entry shape.
+  // apply tray pinning on top of the shared normalization
   function normalizeLayout(layout) {
     var normalized = Util.normalizeLayout(Util.isPlainObject(layout) ? layout : fallbackBarConfig.layout)
     return {
@@ -177,10 +166,7 @@ Item {
     }
   }
 
-  // The tray drawer reveals inward (away from the bar edge). Place it at the
-  // section's inner edge: start of the right section, end of the left/center
-  // sections. The drawer's reserved space then sits next to the bar center,
-  // not stranded mid-section.
+  // place the tray drawer at the section's inner edge
   function pinTrayToInner(entries, section) {
     return BarModel.pinTrayToInner(entries, section)
   }
@@ -192,10 +178,7 @@ Item {
     setRequestedTransparency(config.transparent === true)
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
 
-    // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
-    // cannot diff those: reassigning layoutConfig rebuilds every widget on
-    // every monitor. When a shell.json write only changed inline widget
-    // settings, patch the live layout and running widgets in place instead.
+    // patch the live layout when only widget settings changed
     var next = normalizeLayout(config.layout)
     var delta = BarModel.inlineSettingsDelta(layoutConfig, next)
     if (delta) {
@@ -279,8 +262,7 @@ Item {
     return true
   }
 
-  // Every live instance of a widget id. A bar surface is built per monitor, so
-  // a widget that appears once in the layout is still live once per screen.
+  // live instances of a widget id, one per screen
   function moduleWidgets(pluginId) {
     var id = String(pluginId || "")
     var items = []
@@ -293,11 +275,7 @@ Item {
     return items
   }
 
-  // Resolve the live bar-widget instance for a plugin id (e.g. "fuzi.bluetooth").
-  // Only widgets that expose popup open/close methods count; plain indicators
-  // (clock, workspaces, tray) return null. Used by shell.summon/toggle so
-  // panel hotkeys route through the bar instead of a per-target IPC handler
-  // that only reaches whichever per-monitor instance claimed the target.
+  // resolve the live bar widget for a plugin id
   function findPanelWidget(pluginId) {
     var id = String(pluginId || "")
     if (!id) return null
@@ -310,8 +288,7 @@ Item {
       if (typeof item.open !== "function" || typeof item.close !== "function" || item.opened === undefined) continue
       candidates.push(slot)
     }
-    // Anchored center modules are mounted twice; only the drawn copy can
-    // anchor a popup or carry the open-panel mark. See BarModel.pickDrawnSlot.
+    // only the drawn copy of a center module anchors a popup
     var chosen = BarModel.pickDrawnSlot(candidates)
     return chosen ? chosen.activeItem : null
   }
@@ -559,9 +536,7 @@ Item {
     onTriggered: if (!root.targetTooltipHovered(root.tooltipTarget)) root.hideTooltip(root.tooltipTarget)
   }
 
-  // Presence of the `bar-off` flag = bar hidden. Watching the parent toggles
-  // directory because FileView can't observe a file that doesn't exist yet,
-  // and the flag is created/removed by `fuzi-toggle-bar`.
+  // bar-off flag means hidden, watch the toggles dir
   Process {
     id: barHiddenProbe
     running: true
@@ -843,11 +818,7 @@ Item {
     property string region: ""
 
     visible: entries.length > 0
-    // A hidden list must not build its modules. The center section declares
-    // both an anchored and an unanchored arrangement and shows whichever
-    // fits, so leaving the other one loaded mounts every center module
-    // twice — two IPC handlers registered for the same target, two clocks
-    // ticking, two of every timer and fetch behind them.
+    // do not build modules for a hidden list
     active: visible && entries.length > 0
     sourceComponent: root.vertical ? verticalModuleList : horizontalModuleList
     width: item ? item.implicitWidth : 0
@@ -898,9 +869,7 @@ Item {
     readonly property string moduleName: root.entryId(entry)
     readonly property var moduleSettings: root.entrySettings(entry)
     readonly property string customType: root.customModuleType(entry)
-    // Re-evaluate when the registry mutates (Component reference changes,
-    // plugin enabled/disabled, etc.). Reading the `widgets` property creates
-    // the binding dependency — the wrapped function call alone wouldn't.
+    // re-evaluate when the registry changes
     readonly property var registryComponent: {
       var w = root.barWidgetRegistry.widgets
       if (customType) return null
@@ -917,10 +886,7 @@ Item {
     }
     readonly property bool hovered: moduleHover.hovered
     readonly property bool panelOpen: root.activePopout === slot.activeItem
-    // Modules bigger than the mark they want (a text label in a padded slot,
-    // a multi-line stack on a vertical bar) can say how long the open-panel
-    // dot should be along the bar, so it tracks what the module paints
-    // instead of a fraction of whatever slot it happens to fill.
+    // module can set the open-panel dot length
     readonly property real panelIndicatorExtent: {
       var key = root.vertical ? "openPanelIndicatorHeight" : "openPanelIndicatorWidth"
       var hint = activeItem && key in activeItem ? activeItem[key] : undefined
@@ -994,10 +960,7 @@ Item {
       radius: Math.min(width, height) / 2
       width: root.vertical ? Style.space(2) : slot.panelIndicatorExtent
       height: root.vertical ? slot.panelIndicatorExtent : Style.space(2)
-      // The mark sits on the module's inner edge — the one facing the
-      // desktop — so it underlines a top bar, overlines a bottom one, and
-      // points inward from a left or right one. It reads as pointing at the
-      // panel that opens on that side.
+      // open-panel mark sits on the inner edge
       x: root.vertical
         ? (root.position === "left" ? parent.width - width - inset : inset)
         : Math.round((parent.width - width) / 2)

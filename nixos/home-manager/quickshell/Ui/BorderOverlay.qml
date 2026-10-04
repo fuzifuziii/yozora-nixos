@@ -3,9 +3,7 @@ import QtQuick.Shapes
 import qs.Commons
 import "../Commons/BorderGeometry.js" as Geometry
 
-// Visual-only border renderer. It draws closed side-run contours, or a
-// compound winding path for all four sides, so asymmetric/gradient borders
-// do not require touching odd-even paths. Flat uniform borders use Rectangle.border.
+// visual-only border renderer
 Item {
   id: root
 

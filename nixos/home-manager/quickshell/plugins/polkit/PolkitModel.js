@@ -4,9 +4,7 @@ function promptLooksFingerprint(text) {
 }
 
 function fingerprintConfiguredFromPamConfig(raw) {
-  // Fingerprint is available whenever pam_fprintd appears anywhere in the auth
-  // stack — it need not be the first module. A clamshell gate (pam_exec) may
-  // legitimately precede it to skip fingerprint while the lid is closed.
+  // fingerprint is available if pam_fprintd is anywhere in the stack
   var lines = String(raw || "").split("\n")
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].replace(/^\s+|\s+$/g, "")
