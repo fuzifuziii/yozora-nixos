@@ -7,15 +7,38 @@
     shell = pkgs.fish;
   };
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.kernelPackages = pkgs.linuxPackages_latest;
-  networking.hostName = "nixos";
+  security.sudo.extraRules = [
+    {
+      users = [ "fuzifuziii" ];
+      commands = [
+        {
+          command = "${pkgs.profile-sync-daemon}/bin/psd-overlay-helper";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
+
+  boot = {
+    kernel.sysctl."vm.max_map_count" = 2147483642;
+    #kernelPackages = pkgs.linuxPackages_latest;
+    kernelPackages = pkgs.linuxPackages_zen;
+    loader = {
+      systemd-boot.enable = true;
+      efi.canTouchEfiVariables = true;
+    };
+  };
   time.timeZone = "Europe/Moscow";
 
   # Network
-  networking.networkmanager.enable = true;
-  networking.firewall.enable = false;
+  networking = {
+    hostName = "nixos";
+    firewall.enable = false;
+    networkmanager = {
+      enable = true;
+      wifi.powersave = false;
+    };
+  };
 
   zramSwap = {
     enable = true;
@@ -23,9 +46,12 @@
     memoryPercent = 50;
   };
 
-  hardware.bluetooth = {
-    enable = true;
-    powerOnBoot = false;
+  hardware = {
+    xone.enable = true;
+    bluetooth = {
+      enable = true;
+      powerOnBoot = false;
+    };
   };
 
   # Language
@@ -42,4 +68,10 @@
     enable = true;
     pulse.enable = true;
   };
+
+  # udev
+  services.udev.extraRules = ''
+    SUBSYSTEM=="usb", ATTRS{idVendor}=="3554", MODE="0666"
+    SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3554", MODE="0666"
+  '';
 }

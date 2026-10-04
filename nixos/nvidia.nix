@@ -1,5 +1,11 @@
 { config, lib, pkgs, pkgs-stable, inputs, ... }:
 {
+  services.xserver.videoDrivers = [ "nvidia" ];
+  boot.kernelParams = [
+    "nvidia_drm.modeset=1"
+    "nvidia.NVreg_PreserveVideoMemoryAllocations=1"
+  ];
+  
   hardware = {
     graphics = {
       enable = true;
@@ -8,9 +14,10 @@
 
     nvidia = {
       modesetting.enable = true;
-      open = true;
-      package = config.boot.kernelPackages.nvidiaPackages.latest;
       powerManagement.enable = true;
+      open = true;
+      nvidiaSettings = false;
+      package = config.boot.kernelPackages.nvidiaPackages.stable;
 
       prime = {
         sync.enable = true;

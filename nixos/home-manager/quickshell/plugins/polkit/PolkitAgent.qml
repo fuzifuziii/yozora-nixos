@@ -282,7 +282,6 @@ Item {
       }
 
       Row {
-        id: cardRow
         visible: !root.fingerprintMode
         anchors.fill: parent
         anchors.topMargin: card.contentTopInset

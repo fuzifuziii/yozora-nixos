@@ -278,7 +278,6 @@ PanelWindow {
   // during the fade-out so the dying overlay doesn't swallow clicks that
   // were meant for the apps behind it.
   MouseArea {
-    id: dismissArea
     anchors.fill: parent
     enabled: root.open
     acceptedButtons: Qt.AllButtons

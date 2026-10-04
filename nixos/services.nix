@@ -2,8 +2,17 @@
 {
   services = {
     dbus.enable = true;
+    thermald.enable = true;
     openssh.enable = true;
-    flatpak.enable = true;
+    gvfs.enable = true;
+
+    # Optimization
+    ananicy = {
+      enable = true;
+      package = pkgs.ananicy-cpp;
+      rulesProvider = pkgs.ananicy-rules-cachyos;
+    };
+    psd.enable = true;
 
     # Battery
     upower.enable = true;
@@ -19,7 +28,6 @@
     xserver = {
       enable = true;
       excludePackages = [ pkgs.xterm ];
-      videoDrivers = [ "nvidia" ];
     };
 
     # Cups

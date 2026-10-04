@@ -394,7 +394,6 @@ Panel {
           }
 
           Rectangle {
-            id: barFill
             anchors.left: barTrack.left
             anchors.verticalCenter: barTrack.verticalCenter
             height: barTrack.height

@@ -1,15 +1,11 @@
 import Quickshell
 import QtQuick
-import Quickshell.Services.SystemTray
 import qs.Commons
 import qs.Ui
 
-// A cascading submenu, opened to the side of the TrayMenuRow that hosts it.
-// Renders with TrayMenuRow itself, so a row inside here that itself
-// hasChildren opens another one of these — nesting goes as deep as the
-// DBusMenu tree does. See TrayMenuRow.qml for why this lives in its own
-// file rather than as an inline `component`.
-PopupWindow {
+// Cascading submenu drawn inside the fullscreen host window (no xdg_popup).
+// Rows are TrayMenuRow, so nesting works to any depth.
+Item {
   id: subRoot
   required property QtObject ownerRoot
   required property Item anchorItem
@@ -18,31 +14,34 @@ PopupWindow {
   readonly property bool pointerInside: subHover.hovered
   property bool open: false
 
+  // Attached contentItem is the real window root (PopupCard shadows window.contentItem)
+  readonly property Item hostRoot: anchorItem && anchorItem.QsWindow ? anchorItem.QsWindow.contentItem : null
+  readonly property real cardPad: Style.space(8)
+
   visible: open
-  color: "transparent"
-  implicitWidth: subRoot.rowWidth
-  implicitHeight: subCard.contentHeightHint
+  z: 1000
+  width: rowWidth
+  height: subCard.contentHeightHint
 
-  Component.onCompleted: subRoot.ownerRoot.registerSubmenuWindow(subRoot)
-  Component.onDestruction: subRoot.ownerRoot.unregisterSubmenuWindow(subRoot)
+  // Reparent into the host window so coordinates are window-local
+  parent: hostRoot
 
-  readonly property var anchorWindow: anchorItem && anchorItem.QsWindow ? anchorItem.QsWindow.window : null
-  // TrayMenuRow lives directly in the menu column's local coordinate space.
-  // PopupWindow anchors use that same space for `rect`, so mapping through a
-  // window contentItem would apply the popup's offset for a second time.
-  readonly property real anchorX: anchorItem ? Math.round(anchorItem.x - 2) : 0
-  readonly property real anchorY: anchorItem ? Math.round(anchorItem.y) : 0
-
-  anchor {
-    window: subRoot.anchorWindow
-    adjustment: PopupAdjustment.Slide
-    edges: Edges.Top | Edges.Left
-    gravity: Edges.Bottom | Edges.Left
-    rect.x: subRoot.anchorX
-    rect.y: subRoot.anchorY
-    rect.width: 1
-    rect.height: 1
+  // Place the card to the left of the parent card, aligned with the row
+  function reposition() {
+    if (!anchorItem || !hostRoot) return
+    var p = anchorItem.mapToItem(hostRoot, 0, 0)
+    var nx = p.x - cardPad - width + 1
+    var ny = p.y - cardPad
+    // Flip to the right side if there is no room on the left
+    if (nx < 0) nx = p.x + anchorItem.width + cardPad - 1
+    ny = Math.max(0, Math.min(ny, hostRoot.height - height))
+    x = Math.round(nx)
+    y = Math.round(ny)
   }
+
+  Component.onCompleted: Qt.callLater(reposition)
+  onOpenChanged: if (open) Qt.callLater(reposition)
+  onHeightChanged: if (open) Qt.callLater(reposition)
 
   QsMenuOpener {
     id: subOpener
@@ -58,6 +57,12 @@ PopupWindow {
     radius: Style.cornerRadius
 
     readonly property real contentHeightHint: subColumn.implicitHeight + padding * 2
+
+    // Swallow clicks so the outside-click catcher does not close the menu
+    MouseArea {
+      anchors.fill: parent
+      onClicked: {}
+    }
 
     Column {
       id: subColumn

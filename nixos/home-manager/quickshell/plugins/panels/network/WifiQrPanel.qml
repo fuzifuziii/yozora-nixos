@@ -3,7 +3,6 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
-import qs.Ui
 
 // Centered Wi-Fi share overlay, presented like the speed test: no card,
 // just the QR code floating on a heavy scrim. Esc or the scrim dismiss it.

@@ -4,7 +4,6 @@ import Quickshell.Wayland
 import QtQuick
 import qs.Commons
 import qs.Ui
-import "ClipboardHistory.js" as ClipboardHistory
 
 Item {
   id: root
@@ -15,13 +14,8 @@ Item {
   property int selectedIndex: 0
   property bool cursorActive: false
   property bool clearConfirmOpen: false
-  property var history: []
+  property var rawItems: []
 
-  property string historyPath: Quickshell.env("HOME") + "/.local/share/fuzi/config/clipboard/clipboard-history.json"
-  readonly property string captureScript: String(Qt.resolvedUrl("capture.sh")).replace(/^file:\/\//, "")
-  // Shares the [menu] surface tokens — themes that style the menu also
-  // style the clipboard. Selected-row colors composed in the
-  // singleton so consumers drop them straight into Rectangle bindings.
   property color background: Color.menu.background
   property color foreground: Color.menu.text
   property color border: Color.menu.border
@@ -45,7 +39,7 @@ Item {
     root.selectedIndex = 0
     root.cursorActive = true
     root.disarmPointer()
-    root.rebuildDisplay()
+    root.refresh()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -59,92 +53,49 @@ Item {
     else root.open("{}")
   }
 
-  function normalizeEntry(value) {
-    return ClipboardHistory.normalizeEntry(value)
+  function refresh() {
+    if (!listProc.running) listProc.running = true
   }
 
-  function entryKey(entry) {
-    return ClipboardHistory.entryKey(entry)
-  }
-
-  function loadHistory(raw) {
-    root.history = ClipboardHistory.parseHistory(raw)
-    if (root.opened) root.rebuildDisplay()
-  }
-
-  function saveHistory() {
-    historyFile.setText(JSON.stringify(root.history.slice(0, root.historyLimit), null, 2) + "\n")
-  }
-
-  function addClipboardEntry(entry) {
-    var normalized = ClipboardHistory.normalizeEntry(entry)
-    if (!normalized) return
-
-    root.history = ClipboardHistory.addEntry(root.history, normalized, root.historyLimit)
-    root.saveHistory()
-    if (root.opened) root.rebuildDisplay()
-  }
-
-  function addClipboardJson(line) {
-    root.addClipboardEntry(ClipboardHistory.parseEntryJson(line))
-  }
-
-  function requestClearHistory() {
-    if (root.history.length === 0) return
-    clearConfirm.selectedIndex = 1
-    root.clearConfirmOpen = true
-  }
-
-  function cancelClearHistory() {
-    root.clearConfirmOpen = false
-    root.disarmPointer()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
-  }
-
-  function confirmClearHistory() {
-    root.history = ClipboardHistory.clearHistory()
-    root.saveHistory()
-    root.selectedIndex = 0
-    root.cursorActive = false
-    root.disarmPointer()
-    root.clearConfirmOpen = false
-    root.rebuildDisplay()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
-  }
-
-  function removeDisplayIndex(index) {
-    if (index < 0 || index >= displayModel.count) return
-
-    var row = displayModel.get(index)
-    root.history = ClipboardHistory.removeEntryAt(root.history, row.historyIndex)
-    root.saveHistory()
-
-    if (displayModel.count <= 1) {
-      root.selectedIndex = 0
-      root.cursorActive = false
-    } else if (root.selectedIndex >= displayModel.count - 1) {
-      root.selectedIndex = displayModel.count - 2
+  function parseCliphistList(output) {
+    var lines = String(output || "").split("\n")
+    var items = []
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i]
+      if (!line) continue
+      var tabIndex = line.indexOf("\t")
+      if (tabIndex === -1) continue
+      var id = line.substring(0, tabIndex).trim()
+      var text = line.substring(tabIndex + 1)
+      if (!id) continue
+      var isImg = text.indexOf("[[ binary data") === 0
+      items.push({
+        id: id,
+        rawLine: line,
+        preview: text,
+        isImage: isImg
+      })
     }
-
-    root.disarmPointer()
+    root.rawItems = items
     root.rebuildDisplay()
   }
 
   function rebuildDisplay() {
-    var rows = ClipboardHistory.displayRows(root.history, root.filterText, 50)
-
+    var needle = String(root.filterText || "").trim().toLowerCase()
     displayModel.clear()
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i]
+    var count = 0
+    for (var i = 0; i < root.rawItems.length && count < root.historyLimit; i++) {
+      var item = root.rawItems[i]
+      if (needle && item.preview.toLowerCase().indexOf(needle) === -1) continue
       displayModel.append({
-        entryType: row.entryType,
-        fullText: row.fullText,
-        previewText: row.previewText,
-        previewImage: row.previewImage ? Util.fileUrl(row.previewImage) : "",
-        path: row.path,
-        mime: row.mime,
-        historyIndex: row.index
+        clipId: item.id,
+        rawLine: item.rawLine,
+        entryType: item.isImage ? "image" : "text",
+        previewText: item.preview,
+        fullText: item.preview,
+        previewImage: ""
       })
+      count++
     }
 
     if (displayModel.count === 0) selectedIndex = 0
@@ -219,25 +170,65 @@ Item {
   function copySelected(row) {
     if (!row) return
     root.opened = false
-    if (row.entryType === "image") {
-      Quickshell.execDetached([
-        "bash", "-lc",
-        "wl-copy --type " + Util.shellQuote(row.mime || "image/png")
-          + " --foreground < " + Util.shellQuote(row.path)
-      ])
-    } else if (row.fullText) {
-      Quickshell.execDetached([
-        "bash", "-lc",
-        "printf '%s' " + Util.shellQuote(row.fullText)
-          + " | wl-copy --type text/plain --foreground"
-      ])
-    }
+    Quickshell.execDetached([
+      "bash", "-lc",
+      "printf '%s\\n' " + Util.shellQuote(row.rawLine) + " | cliphist decode | wl-copy"
+    ])
   }
 
   function openSelected(row) {
     if (!row) return
     root.opened = false
-    Quickshell.execDetached([root.fuziPath + "/bin/fuzi-clipboard-open", "--history-index", String(row.historyIndex)])
+    Quickshell.execDetached([root.fuziPath + "/bin/fuzi-clipboard-open", "--clip-id", String(row.clipId)])
+  }
+
+  function removeDisplayIndex(index) {
+    if (index < 0 || index >= displayModel.count) return
+    var row = displayModel.get(index)
+    Quickshell.execDetached([
+      "bash", "-lc",
+      "printf '%s\\n' " + Util.shellQuote(row.rawLine) + " | cliphist delete"
+    ])
+
+    for (var i = 0; i < root.rawItems.length; i++) {
+      if (root.rawItems[i].rawLine === row.rawLine) {
+        root.rawItems.splice(i, 1)
+        break
+      }
+    }
+
+    if (displayModel.count <= 1) {
+      root.selectedIndex = 0
+      root.cursorActive = false
+    } else if (root.selectedIndex >= displayModel.count - 1) {
+      root.selectedIndex = displayModel.count - 2
+    }
+
+    root.disarmPointer()
+    root.rebuildDisplay()
+  }
+
+  function requestClearHistory() {
+    if (root.rawItems.length === 0) return
+    clearConfirm.selectedIndex = 1
+    root.clearConfirmOpen = true
+  }
+
+  function cancelClearHistory() {
+    root.clearConfirmOpen = false
+    root.disarmPointer()
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
+  function confirmClearHistory() {
+    Quickshell.execDetached(["cliphist", "wipe"])
+    root.rawItems = []
+    root.selectedIndex = 0
+    root.cursorActive = false
+    root.disarmPointer()
+    root.clearConfirmOpen = false
+    root.rebuildDisplay()
+    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
   Component.onCompleted: initProc.running = true
@@ -249,60 +240,36 @@ Item {
     referenceItem: card
   }
 
-  FileView {
-    id: historyFile
-    path: root.historyPath
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadHistory(text())
-    onLoadFailed: root.loadHistory("[]")
-    onFileChanged: reload()
+  Process {
+    id: listProc
+    command: ["cliphist", "list"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.parseCliphistList(text)
+    }
   }
 
-  // Reap watchers left behind by a previous shell instance, then start our
-  // own. The pdeathsig on the watchers makes the kernel kill them whenever
-  // the shell exits, however it exits, so no further lifecycle management.
   Process {
     id: initProc
-    command: ["pkill", "-f", "wl-paste .*--watch .*/shell/plugins/clipboard/capture\\.sh"]
+    command: ["pkill", "-f", "wl-paste .*--watch cliphist store"]
     onExited: {
-      currentProc.running = true
       textWatchProc.running = true
       imageWatchProc.running = true
     }
   }
 
   Process {
-    id: currentProc
-    command: [root.captureScript]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: root.addClipboardJson(text)
-    }
-  }
-
-  Process {
     id: textWatchProc
-    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "text", "--watch", root.captureScript, "text"]
+    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "text", "--watch", "cliphist", "store"]
     onExited: watchRestartTimer.restart()
-    stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
-    }
   }
 
   Process {
     id: imageWatchProc
-    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "image/png", "--watch", root.captureScript, "image/png"]
+    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "image", "--watch", "cliphist", "store"]
     onExited: watchRestartTimer.restart()
-    stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
-    }
   }
 
-  // A watcher that dies takes clipboard history with it, silently: copying still
-  // works, the picker still opens, and the old entries are all still there, so
-  // nothing recorded until the next shell reload. Bring it back instead.
   Timer {
     id: watchRestartTimer
     interval: 1000
@@ -491,24 +458,14 @@ Item {
                     anchors.bottomMargin: Style.space(8)
                     spacing: Style.space(10)
 
-                    Image {
-                      visible: parent.parent.previewImage.length > 0
-                      width: visible ? parent.height : 0
-                      height: parent.height
-                      source: parent.parent.previewImage
-                      fillMode: Image.PreserveAspectFit
-                      asynchronous: true
-                      smooth: true
-                    }
-
                     Text {
-                      width: parent.width - (parent.parent.previewImage.length > 0 ? parent.height + parent.spacing : 0)
+                      width: parent.width
                       height: parent.height
                       text: parent.parent.previewText
                       color: parent.parent.hasCursor ? root.selectedText : root.foreground
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.title
-                      opacity: parent.parent.entryType === "image" || parent.parent.entryType === "file" ? 0.72 : 1.0
+                      opacity: parent.parent.entryType === "image" ? 0.72 : 1.0
                       elide: Text.ElideRight
                       wrapMode: Text.NoWrap
                       verticalAlignment: Text.AlignVCenter
@@ -548,7 +505,7 @@ Item {
               }
 
               Text {
-                visible: parent.activeRow && !parent.activeRow.previewImage
+                visible: parent.activeRow !== null
                 anchors.fill: parent
                 anchors.leftMargin: root.contentMargin
                 anchors.rightMargin: 0
@@ -561,20 +518,6 @@ Item {
                 wrapMode: Text.WrapAnywhere
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignTop
-              }
-
-              Image {
-                visible: parent.activeRow && parent.activeRow.previewImage
-                anchors.fill: parent
-                anchors.leftMargin: root.contentMargin
-                anchors.rightMargin: 0
-                anchors.topMargin: 0
-                anchors.bottomMargin: 0
-                source: parent.activeRow ? parent.activeRow.previewImage : ""
-                fillMode: Image.PreserveAspectFit
-                verticalAlignment: Image.AlignTop
-                asynchronous: true
-                smooth: true
               }
             }
           }
@@ -595,7 +538,7 @@ Item {
             }
 
             Text {
-              text: root.history.length === 0 ? "Clipboard is empty" : "No matches for “" + root.filterText + "”"
+              text: root.rawItems.length === 0 ? "Clipboard is empty" : "No matches for “" + root.filterText + "”"
               color: root.foreground
               opacity: 0.7
               font.family: root.fontFamily

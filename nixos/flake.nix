@@ -10,10 +10,10 @@
     };
     lazyvim.url = "github:pfassina/lazyvim-nix";
     nixcord.url = "github:4evy/nixcord";
-    sidra.url = "github:wimpysworld/sidra";
+    cordial.url = "git+https://github.com/luohoa97/cordial?submodules=1";
   };
 
-  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, lazyvim, nixcord, sidra, ... }@inputs: 
+  outputs = { self, nixpkgs, nixpkgs-stable, home-manager, lazyvim, nixcord, cordial, ... }@inputs: 
     let
     system = "x86_64-linux";
     

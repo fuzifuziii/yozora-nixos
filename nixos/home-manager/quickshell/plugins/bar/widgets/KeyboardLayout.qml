@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
@@ -9,7 +8,6 @@ BarWidget {
   id: root
   moduleName: "fuzi.keyboard-layout"
 
-
   property string layoutLabel: ""
   property string layoutFull: ""
 
@@ -17,58 +15,57 @@ BarWidget {
     if (!queryProc.running) queryProc.running = true
   }
 
+  // Ответ может быть строкой, JSON-строкой или объектом
+  function applyLayout(text) {
+    var raw = String(text || "").trim()
+    if (!raw) return
+    var value = raw
+    try { value = JSON.parse(raw) } catch (e) {}
+    if (value !== null && typeof value === "object") value = value.layout || value.keyboardlayout || ""
+    var full = String(value).trim()
+    if (!full) return
+    root.layoutFull = full
+    root.layoutLabel = full.split(/\s+/)[0].substring(0, 3).toUpperCase()
+  }
+
   function cycleLayout() {
-    Hyprland.dispatch("switchxkblayout current next")
+    Quickshell.execDetached(["mmsg", "dispatch", "switch_keyboard_layout"])
     refreshTimer.restart()
   }
 
   Component.onCompleted: refresh()
 
-  Connections {
-    target: Hyprland
-    function onRawEvent(event) {
-      if (!event || !event.name) return
-      if (String(event.name).indexOf("activelayout") !== -1) root.refresh()
+  Process {
+    id: queryProc
+    command: ["mmsg", "get", "keyboardlayout"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.applyLayout(text)
     }
   }
 
+  // Любое событие раскладки запускает повторный запрос
   Process {
-    id: queryProc
-    command: ["bash", "-c", "hyprctl -j devices 2>/dev/null"]
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var devices
-        try { devices = JSON.parse(String(text || "")) } catch (e) { return }
-        var keyboards = Array.isArray(devices.keyboards) ? devices.keyboards : []
-        if (keyboards.length === 0) return
-        var keyboard = keyboards[0]
-        for (var i = 0; i < keyboards.length; i++) {
-          if (keyboards[i].main === true) {
-            keyboard = keyboards[i]
-            break
-          }
-        }
-        var full = String(keyboard.active_keymap || "")
-        if (!full) return
-        root.layoutFull = full
-        var token = full.split(/\s+/)[0]
-        root.layoutLabel = token.substring(0, 3).toUpperCase()
-      }
+    id: watchProc
+    command: ["mmsg", "watch", "keyboardlayout"]
+    running: true
+    stdout: SplitParser {
+      onRead: function(line) { refreshTimer.restart() }
     }
   }
 
   Timer {
     id: refreshTimer
-    interval: 600
+    interval: 100
     onTriggered: root.refresh()
   }
 
+  // Перезапуск watch, если процесс упал
   Timer {
-    interval: 10000
-    running: true
+    interval: 3000
+    running: !watchProc.running
     repeat: true
-    onTriggered: root.refresh()
+    onTriggered: watchProc.running = true
   }
 
   visible: layoutLabel !== ""

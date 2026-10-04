@@ -1,0 +1,3 @@
+{
+  "wallpaper": {"icon":"","label":"Wallpaper","aliases":["background"],"action":"background=$(fuzi-theme-bg-switcher); [[ -n $background ]] && fuzi-theme-bg-set \"$background\""}
+}

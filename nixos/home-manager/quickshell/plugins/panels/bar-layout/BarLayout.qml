@@ -155,7 +155,6 @@ Item {
                      Row {
                        anchors.fill:parent; spacing:Style.space(3)
                        Text {
-                         id: moduleButton
                          width:parent.width-upButton.implicitWidth-downButton.implicitWidth-leftButton.implicitWidth-rightButton.implicitWidth-Style.space(12)
                          height:parent.height
                          text:root.label(root.entryId(modelData))

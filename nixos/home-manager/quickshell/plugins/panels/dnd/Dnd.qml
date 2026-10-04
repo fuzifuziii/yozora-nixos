@@ -65,7 +65,6 @@ BarWidget {
   }
 
   KeyboardPanel {
-    id: historyPopup
     anchorItem: button
     bar: root.bar
     owner: root
@@ -75,7 +74,6 @@ BarWidget {
     padding: Style.spacing.popupPadding
 
     ColumnLayout {
-      id: historyColumn
       anchors.fill: parent
       spacing: Style.space(14)
 

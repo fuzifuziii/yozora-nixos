@@ -8,10 +8,8 @@
     ./programs/kitty.nix
     ./programs/fish.nix
 
+    ./mango.nix
     ./quickshell.nix
-    ./hyprland/settings.nix
-    ./hyprland/xdph.nix
-    ./hyprland/picker.nix
   ];
 
   home.username = "fuzifuziii";

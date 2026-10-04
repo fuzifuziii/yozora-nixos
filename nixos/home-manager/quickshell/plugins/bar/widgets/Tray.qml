@@ -3,7 +3,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
 import Quickshell.Services.SystemTray
-import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
 import "TrayModel.js" as TrayModel
@@ -17,24 +16,7 @@ BarWidget {
   property bool trayMenuOpen: false
   property var activeTrayItem: null
   property var activeTrayAnchor: null
-  // Cascading QML submenus (TraySubmenu instances) currently open, deepest
-  // last. Kept here (not per-popup) so the single HyprlandFocusGrab below
-  // can list every open submenu window — otherwise hovering the mouse into
-  // a submenu counts as "outside" and the grab closes everything under it.
-  property var openSubmenuWindows: []
 
-  function registerSubmenuWindow(w) {
-    if (openSubmenuWindows.indexOf(w) !== -1) return
-    openSubmenuWindows = openSubmenuWindows.concat([w])
-  }
-
-  function unregisterSubmenuWindow(w) {
-    var idx = openSubmenuWindows.indexOf(w)
-    if (idx === -1) return
-    var copy = openSubmenuWindows.slice()
-    copy.splice(idx, 1)
-    openSubmenuWindows = copy
-  }
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var pinnedIds: settings.pinned instanceof Array ? settings.pinned : []
@@ -461,9 +443,7 @@ BarWidget {
     owner: root
     bar: root.bar
     open: root.trayMenuOpen
-    // "hover" just disables PopupCard's own HyprlandFocusGrab — we run our
-    // own below, wide enough to also cover any open cascading submenus.
-    triggerMode: "hover"
+    triggerMode: "click"
     padding: Style.space(8)
     borderColor: Color.popups.border
     contentWidth: trayMenuPopup.fittedContentWidth(Style.space(232))
@@ -498,19 +478,6 @@ BarWidget {
         }
       }
     }
-  }
-
-  // Own grab instead of PopupCard's built-in one (trayMenuPopup uses
-  // triggerMode: "hover" to disable that one) so we can list every currently
-  // open cascading TraySubmenu window here too — otherwise the moment the
-  // pointer enters a submenu, Hyprland sees a window outside the grab and
-  // clears it, closing the whole menu out from under the submenu.
-  HyprlandFocusGrab {
-    active: root.trayMenuOpen
-    windows: [trayMenuPopup]
-      .concat(root.activeTrayAnchor && root.activeTrayAnchor.QsWindow.window ? [root.activeTrayAnchor.QsWindow.window] : [])
-      .concat(root.openSubmenuWindows)
-    onCleared: root.close()
   }
 
   // Renders a tray icon, recoloring symbolic icons to the bar foreground so

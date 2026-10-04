@@ -1,5 +1,3 @@
-// Notification service for the fuzi shell.
-
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
@@ -14,60 +12,35 @@ import "NotificationLogic.js" as NotificationLogic
 Item {
   id: service
 
-  // Injected by fuzi-shell (the first-party service loader).
   property var shell: null
 
   property string fuziPath: Quickshell.env("FUZI_PATH")
   readonly property string home: Quickshell.env("HOME")
-  // History + DND live under XDG_STATE_HOME: they're persistent user state
-  // (history of received notifications, last-set DND preference), not
-  // regeneratable cache that a `rm -rf ~/.cache` should wipe.
-  readonly property string stateDir: home + "/.local/share/fuzi/config/"
+  // Persistent history under state dir (survives quickshell restarts).
+  readonly property string stateDir: home + "/.local/share/fuzi/"
   readonly property string historyPath: stateDir + "notifications.json"
-  // Thumbnails copied from /tmp screenshots are genuinely disposable — if
-  // they vanish the row just renders without an image — so they stay in
-  // ~/.cache where regeneratable artifacts belong.
   readonly property string cacheDir: home + "/.cache/fuzi/"
   readonly property string imageCacheDir: cacheDir + "notification-images/"
-  // Corner radius is shared with the menu and shell panels.
-  // It mirrors Hyprland's current decoration:rounding value.
   readonly property int cornerRadius: Style.cornerRadius
-  // Toasts are fixed to the top-right corner. They only clear the fuzi bar
-  // when the bar occupies the top or right edge, so left/bottom bars do not
-  // pull notification popups away from the expected top-right location.
-  // Falls back to the bar's default size (26 horizontal / 28 vertical) when
-  // shell.bar isn't reachable so the popup never lands on top of the bar.
   readonly property string barPosition: shell && shell.barConfig ? String(shell.barConfig.position || "top") : "top"
   readonly property bool barVertical: barPosition === "left" || barPosition === "right"
   readonly property int defaultBarSize: barVertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   readonly property int liveBarSize: shell && shell.bar && !shell.bar.barHidden ? Math.max(0, shell.bar.barSize) : defaultBarSize
   readonly property int barClearance: liveBarSize + Style.gapsOut
 
-  // Live Notification objects by originalId, kept OUT of the ListModels: a
-  // QObject stored in a model role becomes a dangling C++ pointer when the
-  // server destroys the notification (sender close, DND untrack, dismiss),
-  // and the next read of that role segfaults in QQmlListModel::data. A JS
-  // map only holds a wrapper, which degrades to a catchable error instead.
   property var liveRefs: ({})
 
-  // PersistentProperties handles in-process QML reloads. The on-disk
-  // notifications.json file is the cross-restart backstop — its `dnd` key
-  // is hydrated into persisted.doNotDisturb on startup and written back via
-  // the same debounced save timer used for history entries.
   PersistentProperties {
     id: persisted
     reloadableId: "fuzi-notifications"
     property bool doNotDisturb: false
     property bool doNotDisturbFullscreen: false
     onDoNotDisturbChanged: {
-      // Suppress the write that load-time hydration would otherwise trigger.
       if (service._hydrating) return
       service.scheduleHistorySave()
     }
   }
 
-  // Guards onDoNotDisturbChanged while we're hydrating from disk so the
-  // hydration assignment doesn't immediately schedule a write-back.
   property bool _hydrating: false
 
   readonly property alias doNotDisturb: persisted.doNotDisturb
@@ -93,17 +66,6 @@ Item {
     persisted.doNotDisturbFullscreen = !!value
   }
 
-  // popupModel feeds the on-screen toast stack.
-  // pendingModel  = notifications received but not yet "seen" by the user.
-  //                 Anything DND-suppressed lands here and stays there until
-  //                 the user reviews it; anything that pops up also lives
-  //                 here until the popup dismisses, then moves to pastModel.
-  // pastModel     = notifications the user has already seen on-screen.
-  //                 Surfaced under the Past tab in the history panel.
-  //
-  // Aliased as properties so the bar widget and HistoryPanel (outside this
-  // Item's id scope) can bind to them. QML ids aren't visible to external
-  // consumers without the alias.
   property alias popupModel: popupModel
   property alias pendingModel: pendingModel
   property alias pastModel: pastModel
@@ -131,22 +93,11 @@ Item {
   }
 
   function requestedDuration(expireTimeout) {
-    // FreeDesktop notification spec (and Quickshell) report expireTimeout in
-    // milliseconds, so pass it through directly.
     var ms = Number(expireTimeout || 0)
     if (!isFinite(ms) || ms <= 0) return 0
     return Math.round(ms)
   }
 
-  // DND bypass: only let through notifications we trust to be intentional
-  // and rare.
-  //   - fuzi-action: a user-action confirmation toast ("Theme changed",
-  //     "Screenshot saved"). The user JUST did something — their feedback
-  //     should show.
-  //   - urgency=critical AND app_name=notify-send: bare-CLI emergency alerts.
-  //     Trusted because it's almost always fuzi or system shell scripts —
-  //     chat apps set app_name to their brand (Discord/Slack/Vesktop), which
-  //     falls outside this rule.
   function shouldBypassDnd(notification) {
     return NotificationLogic.shouldBypassDnd(notification, NotificationUrgency.Critical)
   }
@@ -156,28 +107,14 @@ Item {
   }
 
   function handleNotification(notification) {
-    // Without `tracked = true` the Notification object is destroyed as soon
-    // as this signal handler returns, which would null out the `ref` we just
-    // captured for the popup card.
     notification.tracked = true
     var snapshot = snapshotOf(notification)
     liveRefs[snapshot.originalId] = notification
-    // Guard the delete: a newer notification may have reused this originalId
-    // (freedesktop replaces_id) and taken over the map slot.
     notification.closed.connect(function() {
       if (service.liveRefs[snapshot.originalId] === notification)
         delete service.liveRefs[snapshot.originalId]
     })
-    // History is for notifications from real apps (Slack, Discord, mailer,
-    // etc.) — things the user might want to look back at. Skip the pending
-    // / past bookkeeping when:
-    //   - the freedesktop `transient` hint is set ("popup only, don't store")
-    //   - app_name is "notify-send" (the CLI default — means the sender
-    //     didn't bother declaring an identity, so it's almost certainly
-    //     ephemeral test/feedback noise)
-    //   - app_name is "fuzi-action" (Fuzi's own user-action
-    //     toasts — the user just triggered them, they don't
-    //     need to be archived)
+
     var transient = false
     try {
       transient = !!(notification.hints && notification.hints["transient"])
@@ -197,39 +134,21 @@ Item {
       return
     }
 
-    // Pending first, unconditionally. DND only suppresses the toast — the
-    // record still has to land somewhere the user can review later.
     addToPending(snapshot)
-
-    // Kick off a copy of any /tmp screenshot into the persistent image cache.
-    // The cp races the popup; the popup keeps the original path so it always
-    // renders, and the history row gets rewritten to the cached path once
-    // cp.exits.
     maybeCacheImage(snapshot)
 
-    // DND bypass rules — see ~/Work/fuzi/dnd-fix-plan.md. The pending
-    // entry already captured this notification above; we just decide here
-    // whether to also pop a toast. Chat apps abuse urgency=critical to
-    // force visibility, so critical alone isn't enough — we also require
-    // the sender to be CLI-style. See shouldBypassDnd().
     if (service.doNotDisturb && !shouldBypassDnd(notification)) {
       delete liveRefs[snapshot.originalId]
       notification.tracked = false
       return
     }
 
-    // Qt.callLater avoids "QV4::Object::insertMember" crashes when a
-    // Repeater is mid-incubation while we mutate its model.
     Qt.callLater(function() {
       removeByOriginalId(popupModel, snapshot.originalId)
       popupModel.insert(0, snapshot)
     })
   }
 
-  // Remove every row in `model` whose originalId matches. Chat apps reuse
-  // `replaces_id` per the freedesktop spec to update a single notification
-  // in place — without this, every Discord/Slack ping leaves a fresh row
-  // behind and pending fills with hundreds of duplicates.
   function removeByOriginalId(model, originalId) {
     for (var i = model.count - 1; i >= 0; i--) {
       var row = model.get(i)
@@ -244,13 +163,10 @@ Item {
       while (pendingModel.count > service.historyCap) {
         pendingModel.remove(pendingModel.count - 1)
       }
-      scheduleHistorySave()
+      service.scheduleHistorySave()
     })
   }
 
-  // Find a pending entry by its libnotify id and move it to pastModel. Called
-  // when a popup naturally dismisses (timer expired or user clicked X / the
-  // default action) — the user is assumed to have seen it.
   function markSeenByOriginalId(originalId) {
     Qt.callLater(function() {
       for (var i = 0; i < pendingModel.count; i++) {
@@ -262,14 +178,12 @@ Item {
         while (pastModel.count > service.historyCap) {
           pastModel.remove(pastModel.count - 1)
         }
-        scheduleHistorySave()
+        service.scheduleHistorySave()
         return
       }
     })
   }
 
-  // Copy a ListModel row into a plain JS object so we can re-insert it into
-  // a different model without sharing references.
   function snapshotFromRow(row) {
     return {
       id: row.id,
@@ -297,7 +211,7 @@ Item {
       while (pastModel.count > service.historyCap) {
         pastModel.remove(pastModel.count - 1)
       }
-      scheduleHistorySave()
+      service.scheduleHistorySave()
     })
   }
 
@@ -322,10 +236,8 @@ Item {
           else ref.dismiss()
         }
       } catch (e) {
-        // Object already torn down by the server — nothing to dismiss.
       }
     }
-    // User (or the lifetime timer) saw the popup — archive it.
     if (originalId >= 0) markSeenByOriginalId(originalId)
   }
 
@@ -349,7 +261,6 @@ Item {
       service.historyReplayLimit,
       NotificationUrgency.Normal)
 
-    // Replaying nothing at all looks like a dead keybinding, so say so.
     if (rows.length === 0) {
       popupModel.insert(0, {
         id: -1,
@@ -408,10 +319,6 @@ Item {
     scheduleHistorySave()
   }
 
-  // Invoke the libnotify "default" action on the popup's underlying
-  // notification, if it has one, then dismiss. Clients register the default
-  // action with the canonical identifier "default"; e.g. screenshot toasts
-  // use `notify-send -A default=Edit ...` so click-the-card opens the editor.
   function invokePopupDefault(index) {
     if (index < 0 || index >= popupModel.count) return
     var entry = popupModel.get(index)
@@ -429,24 +336,16 @@ Item {
         }
       }
     } catch (e) {
-      // Notification already torn down by the server — fall through to focus.
       console.warn("invoke default failed:", e)
     }
-    // Chat apps (Slack, Discord, Vesktop, etc.) rarely register a "default"
-    // libnotify action — they just expect clicking the notification to
-    // focus their window. Fall back to focusing the sending app by class so
-    // that click-to-jump actually works.
     if (!invoked) focusApp(entry)
     dismissPopup(index)
   }
 
-  // Try to focus an existing Hyprland window matching the notification's
-  // sender. The helper handles case-insensitive class matching.
   function focusApp(entry) {
     if (!entry || !entry.app) return
     focusAppProc.command = [
-      service.fuziPath + "/bin/fuzi-hyprland-focus-app",
-      String(entry.app)
+      "mmsg", "dispatch", "focusclient," + String(entry.app)
     ]
     focusAppProc.running = true
   }
@@ -486,20 +385,20 @@ Item {
 
   Process {
     id: activeWindowProc
-    command: ["hyprctl", "-j", "activewindow"]
+    command: ["mmsg", "get", "focusing-client"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         try {
           var window = JSON.parse(String(text || "{}"))
-          service.activeWindowClass = String(window.class || window.initialClass || "")
-           service.activeWindowTitle = String(window.title || "")
-           service.activeWindowFullscreen = Number(window.fullscreen || 0) > 0
+          service.activeWindowClass = String(window.appid || window.app_id || window.class || "")
+          service.activeWindowTitle = String(window.title || "")
+          service.activeWindowFullscreen = Boolean(window.is_fullscreen !== undefined ? window.is_fullscreen : window.fullscreen)
           service.dismissPopupsForActiveApp()
         } catch (e) {
           service.activeWindowClass = ""
-           service.activeWindowTitle = ""
-           service.activeWindowFullscreen = false
+          service.activeWindowTitle = ""
+          service.activeWindowFullscreen = false
         }
       }
     }
@@ -515,34 +414,35 @@ Item {
 
   Process {
     id: monitorProc
-    command: ["bash", "-lc", "printf '{\"monitors\":'; hyprctl -j monitors; printf ',\"clients\":'; hyprctl -j clients; printf '}'"]
+    command: ["bash", "-lc", "printf '{\"all_tags\":'; mmsg get all-tags 2>/dev/null || echo '[]'; printf ',\"clients\":'; (mmsg get clients 2>/dev/null || mmsg get all-clients 2>/dev/null || echo '[]'); printf '}'"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         try {
           var snapshot = JSON.parse(String(text || "{}"))
-          var monitors = Array.isArray(snapshot.monitors) ? snapshot.monitors : []
+          var monitors = Array.isArray(snapshot.monitors) ? snapshot.monitors : (Array.isArray(snapshot.all_tags) ? snapshot.all_tags : [])
           var clients = Array.isArray(snapshot.clients) ? snapshot.clients : []
           var namesById = ({})
           var activeWorkspaceByMonitor = ({})
           for (var m = 0; m < monitors.length; m++) {
-            if (monitors[m] && monitors[m].name !== undefined) {
-              namesById[String(monitors[m].id)] = String(monitors[m].name)
-              activeWorkspaceByMonitor[String(monitors[m].id)] = monitors[m].activeWorkspace
-                ? Number(monitors[m].activeWorkspace.id) : 0
+            var mon = monitors[m]
+            if (mon && mon.name !== undefined) {
+              var mId = String(mon.id !== undefined ? mon.id : m)
+              namesById[mId] = String(mon.name)
+              if (mon.activeWorkspace) {
+                activeWorkspaceByMonitor[mId] = Number(mon.activeWorkspace.id)
+              }
             }
           }
           var next = ({})
           var nextIds = ({})
           for (var i = 0; i < clients.length; i++) {
             var client = clients[i]
-            if (!client || Number(client.fullscreen || 0) <= 0) continue
-            var activeWorkspace = activeWorkspaceByMonitor[String(client.monitor)]
-            if (activeWorkspace !== undefined && client.workspace
-                && Number(client.workspace.id) !== activeWorkspace) continue
-            var name = namesById[String(client.monitor)]
+            if (!client || !client.fullscreen) continue
+            var monKey = String(client.monitor !== undefined ? client.monitor : "")
+            var name = namesById[monKey]
             if (name) next[name] = true
-            nextIds[String(client.monitor)] = true
+            if (monKey) nextIds[monKey] = true
           }
           service.fullscreenMonitors = next
           service.fullscreenMonitorIds = nextIds
@@ -562,15 +462,6 @@ Item {
     onTriggered: if (!monitorProc.running) monitorProc.running = true
   }
 
-  // ---------------------------------------------------- image cache
-  //
-  // Notifications coming from screenshot helpers ship an `image-path` hint
-  // pointing at /tmp/<file>. We want the history thumbnail to outlive that
-  // file, so we copy it into a long-lived cache dir on ingress and rewrite
-  // the history row's `image` to point at the cache once cp finishes.
-  // image:// (raw-bytes) URIs aren't trivially copyable from QML; document
-  // and skip them for v1.
-
   function imageExtension(srcPath) {
     return NotificationLogic.imageExtension(srcPath)
   }
@@ -578,9 +469,6 @@ Item {
   function maybeCacheImage(snapshot) {
     var image = String(snapshot.image || "")
     if (!image) return
-    // image:// URIs are decoded from raw bytes by Quickshell's image provider.
-    // We can't copy them out from QML, so let history reference them by URI
-    // and accept that they disappear with the source notification.
     if (image.indexOf("image://") === 0) return
     if (image.indexOf("file:///tmp/") !== 0) return
 
@@ -659,8 +547,6 @@ Item {
 
   Process { id: deleteImageProc; running: false }
 
-  // ---------------------------------------------------- history persistence
-
   FileView {
     id: historyFile
     path: service.historyPath
@@ -668,10 +554,6 @@ Item {
     atomicWrites: true
     printErrors: false
     onLoaded: service.loadHistory(text())
-    // First-run: the file doesn't exist yet. Without this branch,
-    // `historyLoaded` stays false forever and `scheduleHistorySave` becomes
-    // a no-op — so the file is never created and history vanishes on
-    // shell restart.
     onLoadFailed: service.loadHistory("")
   }
 
@@ -682,12 +564,9 @@ Item {
     onTriggered: service.flushHistory()
   }
 
-  // Past is a rolling "recently" window. Sweep every minute and drop
-  // anything older than 15 minutes so the tab doesn't accumulate forever.
   readonly property int pastTtlMs: 15 * 60 * 1000
 
   Timer {
-    id: pastPruneTimer
     interval: 60 * 1000
     repeat: true
     running: true
@@ -718,11 +597,6 @@ Item {
   property bool historyLoaded: false
 
   function loadHistory(raw) {
-    // FileView can fire onLoaded more than once during startup — the implicit
-    // preload when `path` resolves, plus the explicit `historyFile.reload()`
-    // in Component.onCompleted can both end up calling here. Without this
-    // guard, the second fire appends a second copy of every persisted row
-    // to the in-memory model.
     if (service.historyLoaded) return
 
     var parsed = NotificationLogic.parseHistory(raw, NotificationUrgency.Normal, service.historyCap)
@@ -743,7 +617,6 @@ Item {
       service._hydrating = false
     }
 
-    // Newest-first on disk; append in order so models match.
     Qt.callLater(function() {
       for (var i = 0; i < parsed.pending.length; i++) pendingModel.append(parsed.pending[i])
       for (var j = 0; j < parsed.past.length; j++) pastModel.append(parsed.past[j])
@@ -786,13 +659,8 @@ Item {
 
   Component.onCompleted: {
     ensureDirsProc.running = true
-    // Once mkdir has had a tick, load the existing history file. FileView
-    // surfaces an empty string when the file doesn't exist; loadHistory
-    // handles that path.
     Qt.callLater(function() { historyFile.reload() })
   }
-
-  // ---------------------------------------------------- IPC
 
   IpcHandler {
     target: "notifications"
@@ -821,7 +689,6 @@ Item {
       return service.showRecentHistory()
     }
 
-    // `clear` empties the past tab (the "I already saw these" bucket).
     function clear(): string {
       service.clearPast()
       return "ok"
@@ -844,8 +711,6 @@ Item {
       return "ok"
     }
 
-    // dismiss the most recent popup; fall back to the most recent pending
-    // entry, then past, if no popup is currently showing.
     function dismissOne(): string {
       if (popupModel.count > 0) {
         service.dismissPopup(0)
@@ -862,7 +727,6 @@ Item {
       return "none"
     }
 
-    // Fire the default action on the most recent popup, then dismiss it.
     function invokeLast(): string {
       if (popupModel.count === 0) return "none"
       service.invokePopupDefault(0)
@@ -891,10 +755,7 @@ Item {
     function ping(): string { return "ok" }
   }
 
-  // ---------------------------------------------------- server
-
   NotificationServer {
-    id: server
     keepOnReload: false
     imageSupported: true
     actionsSupported: true
@@ -907,18 +768,10 @@ Item {
     }
   }
 
-  // -------------------------------------------------------------- popup UI
-  //
-  // One PanelWindow per output (Variants on Quickshell.screens) holding the
-  // stacked toast cards. Layer is Overlay, exclusionMode Ignore, no
-  // keyboard focus — popups are passive surfaces and must never steal input
-  // from the focused application.
-
   Variants {
     model: Quickshell.screens
 
     PanelWindow {
-      id: popupWindow
       required property var modelData
       screen: modelData
       visible: popupModel.count > 0 && !(service.doNotDisturbFullscreen && service.screenIsFullscreen(modelData))
@@ -932,9 +785,6 @@ Item {
       readonly property var popupPlacement: NotificationLogic.popupPlacement(
         service.barPosition, service.barClearance, Style.gapsOut)
 
-      // Content-sized surface (not full-screen). A full-screen transparent
-      // overlay makes compositor `no_screen_share` black out the entire
-      // output; sizing to the toast column keeps only the cards private.
       anchors {
         top: popupPlacement.anchors.top
         bottom: popupPlacement.anchors.bottom
@@ -960,9 +810,6 @@ Item {
         Repeater {
           model: popupModel
 
-          // The delegate is a slot Item that owns lifetime timer state. The
-          // actual visuals live in NotificationCard, which the history panel
-          // also reuses.
           delegate: Item {
             id: cardSlot
             required property int index
@@ -976,8 +823,6 @@ Item {
             required property double expireTimeout
             required property double timestamp
 
-            // Each card sizes itself based on mode (text vs media); the slot
-            // tracks the card so the column auto-fits to whichever is widest.
             Layout.preferredWidth: card.implicitWidth
             Layout.alignment: Qt.AlignRight
             implicitHeight: card.implicitHeight

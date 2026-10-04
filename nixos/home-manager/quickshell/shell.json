@@ -9,9 +9,6 @@
       ],
       "center": [
         {
-          "id": "fuzi.weather"
-        },
-        {
           "id": "fuzi.clock",
           "format": "dddd HH:mm"
         },

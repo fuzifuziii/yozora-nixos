@@ -13,7 +13,6 @@ Item {
   readonly property int renderedFontSize: Math.max(1, Math.round(fontSize))
   readonly property real tightWidth: Math.max(1, glyphMetrics.tightBoundingRect.width)
   readonly property real horizontalCorrection: glyph.implicitWidth / 2 - (glyphMetrics.tightBoundingRect.x + tightWidth / 2)
-  readonly property real paintedCenterX: glyph.x + glyphMetrics.tightBoundingRect.x + tightWidth / 2
   readonly property real baselineY: glyph.y + glyph.baselineOffset
 
   TextMetrics {

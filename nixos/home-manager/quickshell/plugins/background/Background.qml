@@ -223,7 +223,6 @@ Item {
       }
 
       Image {
-        id: oldFrame
         anchors.fill: parent
         source: root.imageUrl(root.oldBackground)
         fillMode: Image.PreserveAspectCrop
@@ -236,7 +235,6 @@ Item {
       }
 
       Item {
-        id: incomingLayer
         anchors.fill: parent
         visible: root.incomingBackground !== "" && incomingFrame.status === Image.Ready && (root.revealProgress >= 1 || panel.maskReady)
         layer.enabled: root.incomingBackground !== "" && root.revealProgress < 1

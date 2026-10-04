@@ -1,6 +1,5 @@
 //@ pragma UseQApplication
 import QtQuick
-import QtQml.Models
 import Quickshell
 import Quickshell.Io
 
@@ -126,7 +125,6 @@ ShellRoot {
   readonly property var barConfig: shellConfig && Util.isPlainObject(shellConfig.bar) ? shellConfig.bar : builtinShellConfig.bar
   onBarConfigChanged: if (bar && "barConfig" in bar) bar.barConfig = shell.barConfig
   FileView {
-    id: defaultsFile
     path: shell.defaultsPath
     watchChanges: true
     printErrors: false
@@ -246,7 +244,6 @@ ShellRoot {
   }
 
   Loader {
-    id: defaultBarLoader
 
     active: shell.activeBarId === shell.defaultBarId
     sourceComponent: defaultBarComponent
@@ -255,7 +252,6 @@ ShellRoot {
   }
 
   Loader {
-    id: pluginBarLoader
 
     active: !shell.pluginReloading && shell.activeBarId !== shell.defaultBarId && shell.activeBarSourceUrl !== ""
     source: shell.activeBarId !== shell.defaultBarId ? shell.activeBarSourceUrl : ""

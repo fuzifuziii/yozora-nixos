@@ -4,7 +4,6 @@
     # Base
     quickshell
     hyprpicker
-    hyprland-preview-share-picker
     quickshell
 
     # Theme
@@ -24,7 +23,12 @@
     wayfreeze
     slurp
     grim
+    wlr-randr
+
+    # Clipboard
     wl-clipboard
+    wl-clip-persist
+    cliphist
 
     # Other
     pulseaudio
@@ -37,26 +41,27 @@
     ]))
     gtk3
     cava
+    perl
   ];
 
   programs = {
-    hyprland.enable = true;
+    mango.enable = true;
   };
 
   xdg.portal = {
     enable = true;
     config = {
-      common = {
-        default = [ "hyprland" "kde" ];
-      };
-      hyprland = {
-        default = [ "hyprland" "kde" ];
-        "org.freedesktop.impl.portal.FileChooser" = "kde";
+      mango = {
+        default = [ "gtk" ];
+        "org.freedesktop.impl.portal.FileChooser" = [ "kde" ];
+        "org.freedesktop.impl.portal.ScreenCast" = [ "wlr" ];
+        "org.freedesktop.impl.portal.Screenshot" = [ "wlr" ];
       };
     };
     extraPortals = [
-      pkgs.xdg-desktop-portal-hyprland
+      pkgs.xdg-desktop-portal-wlr
       pkgs.kdePackages.xdg-desktop-portal-kde
+      pkgs.xdg-desktop-portal-gtk
     ];
   };
 }

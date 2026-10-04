@@ -428,7 +428,6 @@ Panel {
               }
 
               Rectangle {
-                id: yearTrack
                 visible: !root.editingLife
                 anchors.left: yearLabel.right
                 anchors.right: yearNext.left

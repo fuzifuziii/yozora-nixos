@@ -47,7 +47,7 @@ Item {
   // JSONC menu definitions. The shell parses both at startup and merges
   // the user file on top of the defaults, so the keybind → IPC → visible
   // path doesn't have to shell out to bash + jq on every open.
-  property string defaultMenuPath: fuziPath + "/config/fuzi-menu.jsonc"
+  property string defaultMenuPath: Quickshell.env("HOME") + "/.config/quickshell/fuzi-menu.jsonc"
   property string userMenuPath: Quickshell.env("HOME") + "/.config/quickshell/extensions/fuzi-menu.jsonc"
   property var defaultMenuItems: []
   property var userMenuItems: []
@@ -1227,7 +1227,6 @@ Item {
               }
 
               Image {
-                id: appIconImage
                  visible: row.isApp && root.showAppIcons
                 width: Style.font.iconLarge
                 height: Style.font.iconLarge

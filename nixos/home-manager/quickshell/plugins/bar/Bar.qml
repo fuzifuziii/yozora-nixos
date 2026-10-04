@@ -2,7 +2,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
-import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BarModel.js" as BarModel
@@ -132,17 +131,6 @@ Item {
 
   function targetBelongsToWindow(target, window) {
     return !!target && !!window && targetWindow(target) === window
-  }
-
-  function slotWindow(slot) {
-    if (!slot) return null
-    return targetWindow(slot.activeItem) || targetWindow(slot)
-  }
-
-  function sameWindow(left, right) {
-    if (!left || !right) return false
-    if (left === right) return true
-    return !!left.screen && !!right.screen && !!left.screen.name && !!right.screen.name && left.screen.name === right.screen.name
   }
 
   function targetTooltipHovered(target) {
@@ -426,46 +414,6 @@ Item {
     } else {
       root.setRequestedTransparency(nextTransparent)
     }
-  }
-
-  function moduleTargetClickable(target) {
-    return target
-      && target.visible !== false
-      && target.opacity !== 0
-      && target.interactive !== false
-      && target.pressable !== false
-      && target.concealed !== true
-      && typeof target.triggerPress === "function"
-  }
-
-  function moduleClickTargetAt(slot, localX, localY) {
-    for (var i = clickTargets.length - 1; i >= 0; i--) {
-      var target = clickTargets[i]
-      if (!moduleTargetClickable(target)) continue
-
-      var targetPoint = { x: localX, y: localY }
-      try {
-        targetPoint = slot.mapToItem(target, localX, localY)
-      } catch (e) {
-        continue
-      }
-
-      if (targetPoint.x >= 0 && targetPoint.x <= target.width &&
-          targetPoint.y >= 0 && targetPoint.y <= target.height) {
-        return target
-      }
-    }
-
-    if (moduleTargetClickable(slot.activeItem)) return slot.activeItem
-    return null
-  }
-
-  function pressModuleClickTarget(slot, button, localX, localY) {
-    var target = moduleClickTargetAt(slot, localX, localY)
-    if (!target) return false
-
-    target.triggerPress(button)
-    return true
   }
 
   function colorHex(colorValue) {
@@ -1037,7 +985,6 @@ Item {
     }
 
     Rectangle {
-      id: openPanelIndicator
 
       readonly property int inset: Style.space(2)
 

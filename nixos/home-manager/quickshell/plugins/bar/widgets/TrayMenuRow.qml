@@ -1,8 +1,6 @@
 import Quickshell
 import QtQuick
-import Quickshell.Services.SystemTray
 import qs.Commons
-import qs.Ui
 
 // One row of a (possibly nested) context menu. Used both by Tray.qml's
 // top-level trayMenuColumn and by each TraySubmenu's own column, which is
@@ -96,7 +94,6 @@ Item {
   }
 
   Text {
-    id: submenuGlyph
     visible: !menuRow.modelData.isSeparator && menuRow.modelData.hasChildren
     anchors.verticalCenter: parent.verticalCenter
     anchors.left: parent.left

@@ -34,11 +34,6 @@ QtObject {
     changed()
   }
 
-  function metadataFor(id) {
-    var entry = widgets[String(id)]
-    return entry ? entry.metadata : null
-  }
-
   function availableIds() {
     return Object.keys(widgets)
   }

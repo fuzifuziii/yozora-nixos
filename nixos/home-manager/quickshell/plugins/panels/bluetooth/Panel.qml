@@ -458,7 +458,6 @@ Panel {
   // discovery can also time out on its own. While the panel is open, keep
   // nudging it back on so an enabled adapter is always scanning.
   Timer {
-    id: discoveryRetry
     interval: 1000
     repeat: true
     triggeredOnStart: true
@@ -683,7 +682,6 @@ Panel {
         // shortens the list, and — because Contain only moves when a row is
         // actually clipped — never lurches under a hovering mouse.
         ListView {
-          id: deviceListView
           width: parent.width
           height: Math.min(contentHeight, Style.space(400))
           spacing: Style.space(10)

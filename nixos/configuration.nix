@@ -8,16 +8,17 @@
       ./nvidia.nix
       ./services.nix
       ./programs.nix
-      ./hyprland.nix
+      ./mango.nix
+      ./virt.nix
     ];
     
   nixpkgs.config.allowUnfree = true;
   hardware.enableRedistributableFirmware = true;
 
   nix.settings = {
-    #access-tokens = [ "" ];
+    access-tokens = [ "" ];
     experimental-features = [ "nix-command" "flakes" ];
   };
-  
+
   system.stateVersion = "26.05";
 }

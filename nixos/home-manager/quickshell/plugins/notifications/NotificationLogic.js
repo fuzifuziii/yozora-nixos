@@ -173,28 +173,6 @@ function recentHistoryRows(pending, past, limit, normalUrgency) {
   return out.slice(0, max)
 }
 
-function dumpRows(rows) {
-  var values = Array.isArray(rows) ? rows : []
-  var out = []
-  for (var i = 0; i < values.length; i++) {
-    var r = values[i]
-    if (!r) continue
-    out.push({
-      id: r.id,
-      originalId: r.originalId,
-      app: r.app,
-      appIcon: r.appIcon,
-      summary: r.summary,
-      body: r.body,
-      image: r.image,
-      glyph: r.glyph || "",
-      urgency: r.urgency,
-      timestamp: r.timestamp
-    })
-  }
-  return out
-}
-
 function popupPlacement(barPosition, barClearance, gapsOut) {
   var position = String(barPosition || "top")
   var clearance = Number(barClearance)
@@ -236,7 +214,6 @@ if (typeof module !== "undefined") {
     dedupeByOriginalId: dedupeByOriginalId,
     parseHistory: parseHistory,
     recentHistoryRows: recentHistoryRows,
-    dumpRows: dumpRows,
     popupPlacement: popupPlacement,
     imageExtension: imageExtension
   }

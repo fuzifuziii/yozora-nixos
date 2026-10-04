@@ -9,10 +9,7 @@ WidgetButton {
   property real slotSize: Style.bar.iconSlot
   property real opticalSize: Style.bar.iconCanvas
   property bool debugOpticalBounds: Quickshell.env("FUZI_DEBUG_BAR_ICONS") === "1"
-  readonly property real opticalCenterErrorX: glyph.visible ? glyph.paintedCenterX - opticalCanvas.width / 2 : 0
   readonly property real glyphPaintedWidth: glyph.visible ? glyph.tightWidth : 0
-  readonly property real glyphBaselineY: glyph.visible ? glyph.baselineY : 0
-  readonly property int glyphFontSize: glyph.visible ? glyph.renderedFontSize : 0
 
   labelVisible: false
   hasVisualContent: text !== "" || iconComponent !== null
@@ -21,7 +18,6 @@ WidgetButton {
   fixedHeight: vertical ? slotSize : -1
 
   Item {
-    id: opticalCanvas
     anchors.centerIn: parent
     width: root.opticalSize
     height: root.opticalSize

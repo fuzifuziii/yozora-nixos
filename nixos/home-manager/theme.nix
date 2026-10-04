@@ -1,4 +1,4 @@
-{ inputs, pkgs, ... }:
+{ config, inputs, pkgs, ... }:
 {
   home.pointerCursor = {
     enable = true;
@@ -25,4 +25,10 @@
       gtk-theme = "Tokyonight-Dark";
     };
   };
+
+  home.sessionPath = [
+    "${config.home.homeDirectory}/.local/share/fuzi/bin"
+    "${config.home.homeDirectory}/.local/share/fuzi/pg"
+  ];
+  home.sessionVariables.FUZI_PATH = "${config.home.homeDirectory}/.local/share/fuzi";
 }

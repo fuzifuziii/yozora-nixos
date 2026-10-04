@@ -154,7 +154,6 @@ Panel {
   property string focusSection: "dns"  // "header" | "band" | "dns" | "wifi"
   property int headerIndex: 0
   readonly property bool canDisconnect: !!connectedWifiNetwork
-  readonly property bool headerHasDisconnect: false
   readonly property bool canShareWifi: info.type === "wifi" && canShareNetwork(connectedWifiNetwork)
   // The hero switch is the Wi-Fi radio, so it only exists when there is a
   // radio to switch. On a wired box it would otherwise sit there reading
@@ -1006,7 +1005,6 @@ Panel {
   // Slower than detailsPoll on purpose: this shells out to nmcli several times,
   // and band availability only moves when a scan turns up a new BSSID.
   Timer {
-    id: bandPoll
     interval: 4000
     repeat: true
     running: root.opened
@@ -1079,7 +1077,6 @@ Panel {
   // Poll details while the panel is open so the IP/route header catches up
   // as soon as NetworkManager finishes activating a connection.
   Timer {
-    id: detailsPoll
     interval: 1500
     repeat: true
     running: root.opened
@@ -1087,7 +1084,6 @@ Panel {
   }
 
   Timer {
-    id: connectionPhraseTimer
     interval: 2800
     running: root.opened && (root.info.type === "ethernet" || (root.info.type === "wifi" && root.canDisconnect))
     repeat: true
@@ -1288,7 +1284,6 @@ Panel {
           anchors.verticalCenter: parent.verticalCenter
 
           Button {
-            id: qrAction
             visible: root.canShareWifi
             iconText: "󰐲"
             tooltipText: "Show QR code"
@@ -1304,7 +1299,6 @@ Panel {
           }
 
           Button {
-            id: speedAction
             visible: root.canRunSpeedTest
             iconText: "󰓅"
             tooltipText: "Run a speed test"
@@ -1527,7 +1521,6 @@ Panel {
         // the whole animation and takes it out of the Column's spacing once
         // it's actually gone.
         Item {
-          id: bandPillsClip
           width: parent.width
           clip: true
           visible: height > 0
@@ -1652,7 +1645,6 @@ Panel {
       // keyboard-selected row scrolled into view as j/k walk past the
       // visible window.
       ListView {
-        id: networkList
         visible: root.wifiStationAvailable
         width: parent.width
         height: Math.min(contentHeight, Style.space(240))
@@ -2014,7 +2006,6 @@ Panel {
     }
 
     Timer {
-      id: failureTimer
       interval: 2000
       running: row.isFailed && row.isPasswordOpen
       onTriggered: {
@@ -2090,7 +2081,6 @@ Panel {
       }
 
       BorderSurface {
-        id: statusMsgWrapper
         visible: row.isBusy || row.isFailed
         anchors.left: parent.left
         anchors.right: parent.right

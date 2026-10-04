@@ -1,9 +1,9 @@
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
+import Quickshell.Wayland
 import qs.Commons
 
-PopupWindow {
+PanelWindow {
   id: root
 
   required property Item anchorItem
@@ -18,16 +18,14 @@ PopupWindow {
   property var borderSpec: Border.localOrSurfaceSpec("popups", "border", borderColor, Color.popups.border, Math.max(1, Style.space(2)))
   property bool open: false
   property bool centerOnBar: false
-  // "click" — uses HyprlandFocusGrab so clicking outside dismisses the popup.
-  // "hover" — passive overlay; the owning widget controls open via hover.
   property string triggerMode: "click"
 
   readonly property var coordinatorKey: owner || root
   readonly property var anchorWindow: anchorItem ? anchorItem.QsWindow.window : null
   readonly property var popupScreen: anchorWindow ? anchorWindow.screen : null
   readonly property bool containsMouse: cardHover.hovered
-  readonly property real screenW: popupScreen ? popupScreen.width : 0
-  readonly property real screenH: popupScreen ? popupScreen.height : 0
+  readonly property real screenW: popupScreen ? popupScreen.width : (screen ? screen.width : 0)
+  readonly property real screenH: popupScreen ? popupScreen.height : (screen ? screen.height : 0)
   readonly property real barW: anchorWindow ? anchorWindow.width : 0
   readonly property real barH: anchorWindow ? anchorWindow.height : 0
   readonly property real availableCardWidth: screenW > 0
@@ -63,8 +61,8 @@ PopupWindow {
       return { x: 0, y: 0 }
 
     var window = anchorItem.QsWindow.window
-    var popupWidth = implicitWidth
-    var popupHeight = implicitHeight
+    var popupWidth = root.contentWidth
+    var popupHeight = root.contentHeight
     var localX = anchorItem.width / 2 - popupWidth / 2
     var localY = anchorItem.height + margin
 
@@ -103,6 +101,38 @@ PopupWindow {
 
   readonly property var _anchoredRect: anchoredRect()
 
+  readonly property real barScreenX: {
+    if (!anchorWindow) return 0
+    var m = anchorWindow.margins
+    var ml = (m && m.left) ? m.left : 0
+    var mr = (m && m.right) ? m.right : 0
+    if (bar && bar.position === "right") {
+      return root.screenW - anchorWindow.width - mr
+    }
+    return ml
+  }
+
+  readonly property real barScreenY: {
+    if (!anchorWindow) return 0
+    var m = anchorWindow.margins
+    var mt = (m && m.top) ? m.top : 0
+    var mb = (m && m.bottom) ? m.bottom : 0
+    if (bar && bar.position === "bottom") {
+      return root.screenH - anchorWindow.height - mb
+    }
+    return mt
+  }
+
+  readonly property int cardScreenX: {
+    var x = Math.round(barScreenX + _anchoredRect.x)
+    return Math.max(margin, Math.min(x, Math.max(margin, root.screenW - root.contentWidth - margin)))
+  }
+
+  readonly property int cardScreenY: {
+    var y = Math.round(barScreenY + _anchoredRect.y)
+    return Math.max(margin, Math.min(y, Math.max(margin, root.screenH - root.contentHeight - margin)))
+  }
+
   function close() {
     if (owner && "close" in owner) owner.close()
     else root.open = false
@@ -110,10 +140,23 @@ PopupWindow {
 
   default property alias contentItem: contentHolder.children
 
-  visible: open || card.opacity > 0
-  color: "transparent"
   implicitWidth: contentWidth
   implicitHeight: contentHeight
+  screen: root.popupScreen
+  visible: open || card.opacity > 0
+  color: "transparent"
+
+  WlrLayershell.namespace: "fuzi-popup"
+  WlrLayershell.layer: WlrLayer.Overlay
+  WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+  exclusionMode: ExclusionMode.Ignore
+
+  anchors {
+    top: true
+    bottom: true
+    left: true
+    right: true
+  }
 
   onOpenChanged: {
     if (!bar) return
@@ -121,39 +164,31 @@ PopupWindow {
     else if (bar.activePopout === coordinatorKey) bar.releasePopout(coordinatorKey)
   }
 
-  // Outside-click dismissal via Hyprland's focus grab. While `active`, input
-  // is routed only to the listed windows; clicking anywhere else clears the
-  // grab and we close the popup. Skipped for hover-mode popups so the cursor
-  // can move freely between the trigger and the popup.
-  HyprlandFocusGrab {
-    active: root.open && root.triggerMode === "click"
-    windows: root.anchorWindow ? [root, root.anchorWindow] : [root]
-    onCleared: root.close()
-  }
-
-  anchor {
-    id: popupAnchor
-    window: anchorItem ? anchorItem.QsWindow.window : null
-    adjustment: PopupAdjustment.Slide
-    edges: Edges.Top | Edges.Left
-    gravity: Edges.Bottom | Edges.Right
-    rect.x: root._anchoredRect.x
-    rect.y: root._anchoredRect.y
-    rect.width: 1
-    rect.height: 1
+  MouseArea {
+    anchors.fill: parent
+    enabled: root.open && root.triggerMode === "click"
+    onClicked: root.close()
   }
 
   BorderSurface {
     id: card
-    anchors.fill: parent
+    x: root.cardScreenX
+    y: root.cardScreenY
+    width: root.contentWidth
+    height: root.contentHeight
     color: Color.popups.background
     borderSpec: root.borderSpec
     padding: root.padding
-     radius: root.cardRadius
+    radius: root.cardRadius
     opacity: root.open ? 1.0 : 0
 
     Behavior on opacity {
       NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      onClicked: {}
     }
 
     Item {

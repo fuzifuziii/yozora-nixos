@@ -1000,7 +1000,6 @@ Item {
 
           // ---- ButtonGroup -------------------------------------------------
           Column {
-            id: buttonGroupSection
             width: parent.width
             spacing: Style.space(8)
             readonly property bool focused: root.focusSection === "button-group"
@@ -1228,7 +1227,6 @@ Item {
             }
 
             CursorSurface {
-              id: sliderWrapper
               width: parent.width
               implicitHeight: sliderRow.implicitHeight + Style.spacing.rowPaddingX * 2
               outline: true

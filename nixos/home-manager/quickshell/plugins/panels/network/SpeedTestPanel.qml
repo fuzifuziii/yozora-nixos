@@ -31,7 +31,6 @@ PanelWindow {
   readonly property real downloadValue: toMbps(downloadMbps)
   readonly property real uploadValue: toMbps(uploadMbps)
   readonly property bool failed: error !== ""
-  readonly property bool finished: !running && !failed && (downloadValue > 0 || uploadValue > 0)
 
   function toMbps(raw) {
     var value = parseFloat(raw)
@@ -80,7 +79,6 @@ PanelWindow {
     Keys.onEnterPressed: if (!root.running) root.runAgainRequested()
 
     Item {
-      id: cluster
       anchors.centerIn: parent
       width: content.implicitWidth
       height: content.implicitHeight

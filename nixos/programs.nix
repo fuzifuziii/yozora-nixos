@@ -1,11 +1,17 @@
 { config, lib, pkgs, pkgs-stable, inputs, ... }:
+let
+  modAsar = pkgs.fetchurl {
+    url = "https://github.com/PulseSync-LLC/PulseSync-mod/releases/latest/download/app.asar";
+    sha256 = "sha256-AEaHRHSVGjvMu1k39hEwfN+TsrqspGKFhUCUQtyzDvk=";
+  };
+in
 {
   # Packages
   environment.systemPackages = with pkgs; [
     # Base
     kitty
     kdePackages.dolphin
-    feh
+    imv
     mpv
 
     # Apps
@@ -15,9 +21,16 @@
     kdePackages.kdenlive
     blockbench
     (prismlauncher.override {
-    jdks = [ zulu21 ];
+    jdks = [ zulu21 zulu25 ];
     })
-    onlyoffice-desktopeditors
+    qbittorrent
+    chromium
+    (yandex-music.overrideAttrs (old: {
+      postInstall = (old.postInstall or "") + ''
+      cp ${modAsar} $out/share/nodejs/yandex-music.asar
+      '';
+    }))
+    inputs.cordial.packages.${pkgs.system}.default
 
     # Archive
     kdePackages.ark
@@ -26,10 +39,17 @@
     rar
     unrar
     p7zip
+
+    # Prog
+    sqlite
+    gcc
+    dotnet-sdk
   ];
 
   programs = {
+    dconf.enable = true;
     firefox.enable = true;
+    chromium.enable = true;
     fish.enable = true;
     git.enable = true;
 
@@ -74,4 +94,48 @@
     noto-fonts-color-emoji
     nerd-fonts.jetbrains-mono
   ];
+
+  programs = {
+    nix-ld = {
+      enable = true;
+      libraries = with pkgs; [
+        stdenv.cc.cc
+        openssl
+        nss
+        nspr
+        glib
+        gtk3
+        at-spi2-atk
+        at-spi2-core
+        dbus
+        cups
+        expat
+        libdrm
+        libgbm
+        mesa
+        libxkbcommon
+        pango
+        cairo
+        alsa-lib
+        libGL
+        libpulseaudio
+        libnotify
+        libsecret
+        systemd
+        libx11
+        libxcomposite
+        libxdamage
+        libxext
+        libxfixes
+        libxrandr
+        libxcb
+        libxcursor
+        libxi
+        libxtst
+        libxscrnsaver
+        libxshmfence
+        pipewire
+      ];
+    };
+  };
 }

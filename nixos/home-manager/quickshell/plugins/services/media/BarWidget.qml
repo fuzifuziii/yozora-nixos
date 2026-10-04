@@ -13,7 +13,6 @@ BarWidget {
   readonly property var sourcePlayers: mediaService ? mediaService.sourcePlayers : []
 
   readonly property bool hasMedia: activePlayer !== null && (activePlayer.trackTitle || activePlayer.trackArtist)
-  readonly property string playIcon: activePlayer && activePlayer.isPlaying ? "󰏤" : "󰐊"
   readonly property string title: activePlayer ? (activePlayer.trackTitle || "") : ""
   readonly property string artist: activePlayer ? (activePlayer.trackArtist || "") : ""
 
@@ -35,7 +34,6 @@ BarWidget {
     if (!root.activePlayer || !root.activePlayer.isPlaying) return 0.12
     return root.cavaLevels.length > index ? Math.min(1, root.cavaLevels[index] * 1.25) : 0.12
   }
-  property real maxLabelWidth: 180
   readonly property real openPanelIndicatorWidth: button.glyphPaintedWidth
 
   visible: true
@@ -83,7 +81,6 @@ BarWidget {
       spacing: Style.space(10)
 
       Row {
-        id: visualizer
         width: parent.width
         height: Style.space(100)
         spacing: Style.space(28)
@@ -138,13 +135,11 @@ BarWidget {
         }
 
         Item {
-          id: visualizerInfo
           width: parent.width - record.width - parent.spacing
           height: parent.height
           anchors.verticalCenter: parent.verticalCenter
 
           Row {
-            id: spectrumRow
             width: parent.width
             height: Style.space(52)
             spacing: Style.space(4)
@@ -317,8 +312,7 @@ BarWidget {
   }
 
   Process {
-    id: cavaProc
-    command: ["cava", "-p", Quickshell.env("FUZI_PATH") + "/config/cava/fuzi-media.conf"]
+    command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/cava/fuzi-media.conf"]
     running: root.activePlayer && root.activePlayer.isPlaying
     stdout: SplitParser { onRead: function(line) { root.updateCava(line) } }
   }
